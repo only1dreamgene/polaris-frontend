@@ -34,13 +34,15 @@ export interface OnChainMarket {
   gracePeriod: string;
   lazerContract: string;
   feedId: number;
-  feeBps: number;
+  baseFeeBps: number;
+  minFeeBps: number;
   treasury: string;
   status: 'Open' | 'ResolvedYes' | 'ResolvedNo' | 'Cancelled';
   finalPrice: string;
   poolYes: string;
   poolNo: string;
   totalSupply: string;
+  initialLiquidity: string;
 }
 
 export const api = {
@@ -50,6 +52,7 @@ export const api = {
   getPosition: (id: string, address: string) =>
     request<{ yes: string; no: string }>(`/markets/${id}/position?address=${encodeURIComponent(address)}`),
   getPrice: (id: string) => request<{ yesBps: number; noBps: number }>(`/markets/${id}/price`),
+  getFee: (id: string) => request<{ feeBps: number }>(`/markets/${id}/fee`),
   getTickerPrice: (feedId: string) => request<unknown>(`/prices/${feedId}`),
 
   faucet: (address: string) =>

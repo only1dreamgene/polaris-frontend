@@ -9,6 +9,7 @@ import { Card, CardBody } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { OddsBar } from '@/components/odds-bar';
+import { EmbedCodeButton } from '@/components/embed-code-button';
 import { centsToUsd, formatCountdown, stroopsToXlm, xlmToStroops } from '@/lib/format';
 import { redeemableValue, type MarketStatus } from '@/lib/portfolio';
 
@@ -33,6 +34,12 @@ export default function MarketDetailPage({ params }: { params: Promise<{ id: str
   const { data: state } = useQuery({
     queryKey: ['state', id],
     queryFn: () => api.getMarketState(id),
+  });
+  const { data: fee } = useQuery({
+    queryKey: ['fee', id],
+    queryFn: () => api.getFee(id),
+    enabled: market?.status === 'watching',
+    refetchInterval: 15_000,
   });
   const { data: position, refetch: refetchPosition } = useQuery({
     queryKey: ['position', id, wallet?.address],
@@ -97,9 +104,13 @@ export default function MarketDetailPage({ params }: { params: Promise<{ id: str
           <span className="text-xs font-semibold uppercase tracking-wide text-[var(--faint)]">XLM/USD</span>
           <Badge>{market.status}</Badge>
         </div>
-        <h1 className="mb-4 text-2xl font-bold">
+        <h1 className="mb-3 text-2xl font-bold">
           Will XLM be ≥ {centsToUsd(market.strikePriceCents)} by expiry?
         </h1>
+
+        <div className="mb-4">
+          <EmbedCodeButton contractId={id} />
+        </div>
 
         {price && (
           <Card className="mb-4">
@@ -128,8 +139,13 @@ export default function MarketDetailPage({ params }: { params: Promise<{ id: str
                   </div>
                 </div>
                 <div>
-                  <div className="text-[var(--faint)]">Fee</div>
-                  <div className="font-semibold">{(state.feeBps / 100).toFixed(2)}%</div>
+                  <div className="text-[var(--faint)]">Fee now</div>
+                  <div className="font-semibold">
+                    {fee ? `${(fee.feeBps / 100).toFixed(2)}%` : '…'}
+                  </div>
+                  <div className="text-xs text-[var(--faint)]">
+                    {(state.baseFeeBps / 100).toFixed(2)}% → {(state.minFeeBps / 100).toFixed(2)}% as volume grows
+                  </div>
                 </div>
               </>
             )}

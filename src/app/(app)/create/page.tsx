@@ -16,7 +16,8 @@ export default function CreateMarketPage() {
   const [strikeUsd, setStrikeUsd] = useState('0.15');
   const [expiryLocal, setExpiryLocal] = useState('');
   const [graceMins, setGraceMins] = useState('60');
-  const [feeBps, setFeeBps] = useState('100');
+  const [baseFeeBps, setBaseFeeBps] = useState('100');
+  const [minFeeBps, setMinFeeBps] = useState('20');
   const [liquidityXlm, setLiquidityXlm] = useState('1000');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -32,7 +33,8 @@ export default function CreateMarketPage() {
         strikePriceCents: strikeCents,
         expiry: expiryUnix,
         gracePeriodSecs: Number(graceMins) * 60,
-        feeBps: Number(feeBps),
+        baseFeeBps: Number(baseFeeBps),
+        minFeeBps: Number(minFeeBps),
         initialLiquidityStroops: xlmToStroops(liquidityXlm).toString(),
       });
       router.push(`/market/${market.contractId}`);
@@ -79,14 +81,20 @@ export default function CreateMarketPage() {
                 required
               />
             </label>
+            <label className="block text-sm">
+              Grace period (mins)
+              <Input value={graceMins} onChange={(e) => setGraceMins(e.target.value)} className="mt-1" />
+            </label>
             <div className="grid grid-cols-2 gap-4">
               <label className="block text-sm">
-                Grace period (mins)
-                <Input value={graceMins} onChange={(e) => setGraceMins(e.target.value)} className="mt-1" />
+                Base fee (bps)
+                <Input value={baseFeeBps} onChange={(e) => setBaseFeeBps(e.target.value)} className="mt-1" />
+                <span className="mt-1 block text-xs text-[var(--faint)]">fee on a fresh market</span>
               </label>
               <label className="block text-sm">
-                Fee (bps)
-                <Input value={feeBps} onChange={(e) => setFeeBps(e.target.value)} className="mt-1" />
+                Min fee (bps)
+                <Input value={minFeeBps} onChange={(e) => setMinFeeBps(e.target.value)} className="mt-1" />
+                <span className="mt-1 block text-xs text-[var(--faint)]">floor as volume grows</span>
               </label>
             </div>
             <label className="block text-sm">
