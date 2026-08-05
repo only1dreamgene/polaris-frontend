@@ -23,6 +23,7 @@ remaining role for Freighter to play, so it isn't a dependency here.
 | `lib/webauthn.ts` | Passkey register/sign. The one piece of real crypto math here: browsers return DER-encoded, non-normalized ECDSA signatures; the contract needs raw r‖s, low-S normalized. Verified with `scripts/verify-webauthn-math.mjs` (real keypairs, real signatures, no browser needed). |
 | `lib/passkey-wallet.ts` | Orchestrates onboarding (register passkey → backend deploys a smart wallet) and the two-step sponsored-transaction flow (prepare → sign → submit). |
 | `lib/portfolio.ts` | Mirrors the contract's redemption math for position values. Verified with `scripts/verify-portfolio-math.mts`. |
+| `lib/amm.ts` | Mirrors the contract's constant-product swap math, to give `buy` a real slippage floor. `min_shares_out` had been hardcoded to `0` — no slippage protection at all — until pressure-testing this system caught it. Verified with `scripts/verify-amm-math.mts`. |
 | `lib/api.ts` | Typed client for every `polaris-oracle` endpoint this app uses. |
 | `app/(app)/*` | Dashboard, market detail + trade form, portfolio, admin console — share the topbar shell in `(app)/layout.tsx`. |
 | `app/docs/` | Public docs page, outside the `(app)` route group so it renders without the app chrome. |
@@ -62,12 +63,13 @@ npm run dev      # http://localhost:3000
 
 This app ships no test framework (a deliberate choice matching the rest of
 this system's scoping — see the other repos' READMEs for their own
-boundaries). The two pieces of non-trivial logic are verified as standalone
+boundaries). The pieces of non-trivial logic are verified as standalone
 scripts instead:
 
 ```sh
 node scripts/verify-webauthn-math.mjs      # DER→raw + low-S signature conversion
 node --experimental-strip-types scripts/verify-portfolio-math.mts   # redemption/mark-to-market math
+node --experimental-strip-types scripts/verify-amm-math.mts         # buy price-impact estimate, cross-checked against the contract's own hand-computed values
 ```
 
 ## Known gaps

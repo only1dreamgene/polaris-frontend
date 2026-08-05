@@ -12,6 +12,10 @@ import { OddsBar } from '@/components/odds-bar';
 import { EmbedCodeButton } from '@/components/embed-code-button';
 import { centsToUsd, formatCountdown, stroopsToXlm, xlmToStroops } from '@/lib/format';
 import { redeemableValue, type MarketStatus } from '@/lib/portfolio';
+import { estimateBuyOut, withSlippageTolerance } from '@/lib/amm';
+
+/** 2% — how much worse a fill is allowed to be than the quote at click-time before the trade reverts instead of silently eating the difference. */
+const SLIPPAGE_TOLERANCE_BPS = 200;
 
 export default function MarketDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
@@ -54,16 +58,24 @@ export default function MarketDetailPage({ params }: { params: Promise<{ id: str
   const isOpen = market.status === 'watching';
 
   async function handleTrade() {
-    if (!wallet) return;
+    if (!wallet || !state || !fee) return;
     setBusy(true);
     setTxError(null);
     setTxResult(null);
     try {
       const stroops = xlmToStroops(amount);
+      const estimate = estimateBuyOut(
+        side,
+        stroops,
+        BigInt(state.poolYes),
+        BigInt(state.poolNo),
+        fee.feeBps,
+      );
+      const minSharesOut = withSlippageTolerance(estimate, SLIPPAGE_TOLERANCE_BPS);
       const { txHash } = await callAsWallet(wallet, id, 'buy', {
         prediction: side,
         collateral_amount: stroops.toString(),
-        min_shares_out: '0',
+        min_shares_out: minSharesOut.toString(),
       });
       setTxResult(txHash);
       await Promise.all([
@@ -197,7 +209,7 @@ export default function MarketDetailPage({ params }: { params: Promise<{ id: str
                   className="w-full"
                   variant={side === 'Yes' ? 'yes' : 'no'}
                   onClick={handleTrade}
-                  disabled={busy}
+                  disabled={busy || !state || !fee}
                 >
                   {busy ? 'Confirm with passkey…' : `Buy ${side}`}
                 </Button>

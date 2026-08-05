@@ -9,6 +9,9 @@ import { Card, CardBody } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { OddsBar } from '@/components/odds-bar';
 import { centsToUsd, xlmToStroops } from '@/lib/format';
+import { estimateBuyOut, withSlippageTolerance } from '@/lib/amm';
+
+const SLIPPAGE_TOLERANCE_BPS = 200; // 2%
 
 /**
  * The embeddable version of the market detail page — meant to run inside a
@@ -44,6 +47,17 @@ export default function EmbedMarketPage({ params }: { params: Promise<{ id: stri
     refetchInterval: 15_000,
     enabled: market?.status === 'watching',
   });
+  const { data: state } = useQuery({
+    queryKey: ['state', id],
+    queryFn: () => api.getMarketState(id),
+    enabled: market?.status === 'watching',
+  });
+  const { data: fee } = useQuery({
+    queryKey: ['fee', id],
+    queryFn: () => api.getFee(id),
+    enabled: market?.status === 'watching',
+    refetchInterval: 15_000,
+  });
 
   if (!market) {
     return (
@@ -54,16 +68,24 @@ export default function EmbedMarketPage({ params }: { params: Promise<{ id: stri
   const isOpen = market.status === 'watching';
 
   async function handleTrade() {
-    if (!wallet) return;
+    if (!wallet || !state || !fee) return;
     setBusy(true);
     setTxError(null);
     setTxResult(null);
     try {
       const stroops = xlmToStroops(amount);
+      const estimate = estimateBuyOut(
+        side,
+        stroops,
+        BigInt(state.poolYes),
+        BigInt(state.poolNo),
+        fee.feeBps,
+      );
+      const minSharesOut = withSlippageTolerance(estimate, SLIPPAGE_TOLERANCE_BPS);
       const { txHash } = await callAsWallet(wallet, id, 'buy', {
         prediction: side,
         collateral_amount: stroops.toString(),
-        min_shares_out: '0',
+        min_shares_out: minSharesOut.toString(),
       });
       setTxResult(txHash);
       await queryClient.invalidateQueries({ queryKey: ['price', id] });
@@ -139,7 +161,7 @@ export default function EmbedMarketPage({ params }: { params: Promise<{ id: stri
                 className="w-full"
                 variant={side === 'Yes' ? 'yes' : 'no'}
                 onClick={handleTrade}
-                disabled={busy}
+                disabled={busy || !state || !fee}
               >
                 {busy ? 'Confirm with passkey…' : `Buy ${side}`}
               </Button>
