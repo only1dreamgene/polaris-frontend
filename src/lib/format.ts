@@ -37,3 +37,17 @@ export function shortAddress(address: string): string {
   if (address.length <= 12) return address;
   return `${address.slice(0, 6)}…${address.slice(-4)}`;
 }
+
+const STATUS_LABELS: Record<string, string> = {
+  watching: 'Open',
+  pending: 'Settling',
+  settling: 'Settling',
+  cancelling: 'Cancelling',
+  settled: 'Settled',
+  cancelled: 'Cancelled',
+};
+
+/** Backend/on-chain status strings are internal names (e.g. "watching") — this is what a customer should read instead. */
+export function statusLabel(status: string): string {
+  return STATUS_LABELS[status] ?? status;
+}

@@ -6,7 +6,7 @@ import { api } from '@/lib/api';
 import { Card, CardBody } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { OddsBar } from '@/components/odds-bar';
-import { centsToUsd, formatCountdown } from '@/lib/format';
+import { centsToUsd, formatCountdown, statusLabel } from '@/lib/format';
 
 function statusTone(status: string): 'yes' | 'no' | 'warn' | 'neutral' {
   if (status === 'settled') return 'yes';
@@ -37,7 +37,7 @@ function MarketCard({ contractId }: { contractId: string }) {
             <span className="text-xs font-semibold uppercase tracking-wide text-[var(--faint)]">
               XLM/USD
             </span>
-            <Badge tone={statusTone(market.status)}>{market.status}</Badge>
+            <Badge tone={statusTone(market.status)}>{statusLabel(market.status)}</Badge>
           </div>
           <h3 className="mb-3 text-lg font-semibold">
             Will XLM be ≥ {centsToUsd(market.strikePriceCents)} by expiry?
@@ -67,7 +67,8 @@ export default function DashboardPage() {
     <div>
       <h1 className="mb-1 text-2xl font-bold">Markets</h1>
       <p className="mb-6 text-sm text-[var(--muted)]">
-        Predict XLM&rsquo;s price. Fully collateralized, settled on-chain by Pyth.
+        Bet YES or NO on where XLM&rsquo;s price lands. You can never lose more than you stake &mdash;
+        your funds sit on-chain, untouched by anyone, until the market settles.
       </p>
 
       {isLoading && <p className="text-sm text-[var(--muted)]">Loading markets…</p>}

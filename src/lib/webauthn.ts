@@ -33,11 +33,44 @@ export interface WebAuthnAssertion {
   signatureHex: string;
 }
 
-export async function registerPasskey(displayName: string): Promise<PasskeyIdentity> {
+const WEBAUTHN_ERROR_MESSAGES: Record<string, string> = {
+  NotAllowedError:
+    "This browser couldn't complete the passkey prompt. Make sure Touch ID/Windows Hello is set up, or that you're signed into a Chrome/Safari profile with a passkey manager enabled, then try again.",
+  SecurityError: "This page isn't allowed to use passkeys right now — that's a configuration issue on our end, not yours.",
+  NotSupportedError: "Your browser doesn't support the passkey method this app needs — try updating it or switching browsers.",
+  InvalidStateError: 'A passkey for this site already exists on this device. Try signing in instead of creating a new one.',
+  ConstraintError: "This device's passkey method doesn't meet this app's security requirements.",
+  UnknownError: 'Something went wrong talking to your passkey manager. Please try again.',
+};
+
+/**
+ * `navigator.credentials.create/get` reject with a raw `DOMException` whose
+ * `.message` is written for a spec, not a person (e.g. a literal link to
+ * the WebAuthn spec's privacy-considerations section) — never show that
+ * text directly. This maps the handful of names browsers actually throw to
+ * something a user can act on; anything unrecognized falls back to a
+ * generic retry message rather than leaking the raw exception.
+ */
+export function humanizeWebAuthnError(err: unknown): string {
+  const name = err instanceof Error ? err.name : '';
+  return WEBAUTHN_ERROR_MESSAGES[name] ?? 'Could not set up your passkey. Please try again.';
+}
+
+/**
+ * `signal` lets the caller abort a ceremony that never resolves — e.g. an
+ * embedded webview (VS Code's Simple Browser, some in-app browsers) that
+ * has no real platform-authenticator bridge, where `navigator.credentials
+ * .create()` just hangs forever with no prompt and no rejection. The
+ * `timeout` field below is only a hint to the *authenticator*; plenty of
+ * environments ignore it, so the caller-side abort is what actually
+ * guarantees this resolves.
+ */
+export async function registerPasskey(displayName: string, signal?: AbortSignal): Promise<PasskeyIdentity> {
   const challenge = crypto.getRandomValues(new Uint8Array(32));
   const userId = crypto.getRandomValues(new Uint8Array(16));
 
   const credential = (await navigator.credentials.create({
+    signal,
     publicKey: {
       rp: { id: config.webauthnRpId, name: config.webauthnRpName },
       user: { id: userId, name: displayName, displayName },

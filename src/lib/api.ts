@@ -4,6 +4,11 @@ import type { WebAuthnAssertion } from './webauthn';
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`${config.oracleUrl}${path}`, {
     ...init,
+    // Needed for the email-login session cookie (httpOnly, set by the
+    // backend) to be sent on same-site-but-cross-origin requests like
+    // localhost:3000 -> localhost:3001. Harmless for every other endpoint,
+    // which simply has no cookie to send.
+    credentials: 'include',
     headers: { 'content-type': 'application/json', ...init?.headers },
   });
   if (!res.ok) {
@@ -86,6 +91,16 @@ export const api = {
     args: Record<string, string | number>;
     assertion: WebAuthnAssertion;
   }) => request<{ txHash: string }>('/wallets/tx/submit', { method: 'POST', body: JSON.stringify(params) }),
+
+  // email login (fallback for browsers/webviews without usable WebAuthn — see `wallet-provider.tsx`)
+  requestEmailCode: (email: string) =>
+    request<{ sent: boolean }>('/auth/email/request', { method: 'POST', body: JSON.stringify({ email }) }),
+  verifyEmailCode: (email: string, code: string) =>
+    request<{ address: string }>('/auth/email/verify', { method: 'POST', body: JSON.stringify({ email, code }) }),
+  getEmailSession: () => request<{ email: string; address: string }>('/auth/email/me'),
+  emailLogout: () => request<{ ok: boolean }>('/auth/email/logout', { method: 'POST' }),
+  emailTrade: (params: { contractId: string; function: string; args: Record<string, string | number> }) =>
+    request<{ txHash: string }>('/auth/email/trade', { method: 'POST', body: JSON.stringify(params) }),
 
   // admin
   createMarket: (adminKey: string, body: Record<string, unknown>) =>

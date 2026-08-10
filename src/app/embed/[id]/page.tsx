@@ -1,6 +1,6 @@
 'use client';
 
-import { use, useState } from 'react';
+import { use, useMemo, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { useWallet } from '@/lib/wallet-provider';
@@ -8,10 +8,17 @@ import { callAsWallet } from '@/lib/passkey-wallet';
 import { Card, CardBody } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { OddsBar } from '@/components/odds-bar';
-import { centsToUsd, xlmToStroops } from '@/lib/format';
+import { AuthControls } from '@/components/auth-controls';
+import { centsToUsd, statusLabel, stroopsToXlm, xlmToStroops } from '@/lib/format';
 import { estimateBuyOut, withSlippageTolerance } from '@/lib/amm';
 
 const SLIPPAGE_TOLERANCE_BPS = 200; // 2%
+
+const STEP_LABEL: Record<string, string> = {
+  passkey: 'Confirm Face ID / Touch ID…',
+  deploying: 'Setting up your account…',
+  done: 'Ready',
+};
 
 /**
  * The embeddable version of the market detail page — meant to run inside a
@@ -31,7 +38,8 @@ const SLIPPAGE_TOLERANCE_BPS = 200; // 2%
  */
 export default function EmbedMarketPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
-  const { wallet, connecting, error: walletError, createWallet } = useWallet();
+  const { wallet, connecting, creationStep, error: walletError, webauthnSupported, createWallet, cancelCreation } =
+    useWallet();
   const queryClient = useQueryClient();
 
   const [side, setSide] = useState<'Yes' | 'No'>('Yes');
@@ -39,6 +47,11 @@ export default function EmbedMarketPage({ params }: { params: Promise<{ id: stri
   const [busy, setBusy] = useState(false);
   const [txResult, setTxResult] = useState<string | null>(null);
   const [txError, setTxError] = useState<string | null>(null);
+  // Manual escape hatch to the email flow — shown after a live passkey
+  // attempt fails (walletError set with no wallet yet), or forced on
+  // whenever this browser/webview has no WebAuthn API at all.
+  const [preferEmail, setPreferEmail] = useState(false);
+  const showEmailFallback = !wallet && (preferEmail || !webauthnSupported);
 
   const { data: market } = useQuery({ queryKey: ['market', id], queryFn: () => api.getMarket(id) });
   const { data: price } = useQuery({
@@ -59,6 +72,18 @@ export default function EmbedMarketPage({ params }: { params: Promise<{ id: stri
     refetchInterval: 15_000,
   });
 
+  const payoutPreview = useMemo(() => {
+    if (!state || !fee) return null;
+    try {
+      const stroops = xlmToStroops(amount);
+      if (stroops <= 0n) return null;
+      const bonus = estimateBuyOut(side, stroops, BigInt(state.poolYes), BigInt(state.poolNo), fee.feeBps);
+      return stroopsToXlm((stroops + bonus).toString());
+    } catch {
+      return null;
+    }
+  }, [amount, side, state, fee]);
+
   if (!market) {
     return (
       <div className="p-4 text-sm text-[var(--muted)]">Loading…</div>
@@ -68,10 +93,17 @@ export default function EmbedMarketPage({ params }: { params: Promise<{ id: stri
   const isOpen = market.status === 'watching';
 
   async function handleTrade() {
-    if (!wallet || !state || !fee) return;
-    setBusy(true);
+    if (!state || !fee) return;
     setTxError(null);
     setTxResult(null);
+
+    let activeWallet = wallet;
+    if (!activeWallet) {
+      activeWallet = await createWallet('bettor');
+      if (!activeWallet) return;
+    }
+
+    setBusy(true);
     try {
       const stroops = xlmToStroops(amount);
       const estimate = estimateBuyOut(
@@ -82,7 +114,7 @@ export default function EmbedMarketPage({ params }: { params: Promise<{ id: stri
         fee.feeBps,
       );
       const minSharesOut = withSlippageTolerance(estimate, SLIPPAGE_TOLERANCE_BPS);
-      const { txHash } = await callAsWallet(wallet, id, 'buy', {
+      const { txHash } = await callAsWallet(activeWallet, id, 'buy', {
         prediction: side,
         collateral_amount: stroops.toString(),
         min_shares_out: minSharesOut.toString(),
@@ -115,26 +147,22 @@ export default function EmbedMarketPage({ params }: { params: Promise<{ id: stri
               </span>
               Polaris
             </a>
-            {!isOpen && <span className="text-xs text-[var(--faint)]">{market.status}</span>}
+            {!isOpen && <span className="text-xs text-[var(--faint)]">{statusLabel(market.status)}</span>}
           </div>
 
           <h2 className="text-sm font-semibold leading-snug">
             XLM ≥ {centsToUsd(market.strikePriceCents)}?
           </h2>
+          <p className="-mt-1.5 text-[10px] text-[var(--faint)]">
+            Can&rsquo;t lose more than you stake &mdash; funds held on-chain until settled.
+          </p>
 
           {price && <OddsBar yesBps={price.yesBps} noBps={price.noBps} />}
 
           {!isOpen ? (
             <p className="text-xs text-[var(--muted)]">Trading closed.</p>
-          ) : !wallet ? (
-            <Button
-              size="sm"
-              className="w-full"
-              disabled={connecting}
-              onClick={() => void createWallet('bettor')}
-            >
-              {connecting ? 'Creating…' : 'Sign in with passkey'}
-            </Button>
+          ) : showEmailFallback ? (
+            <AuthControls compact />
           ) : (
             <div className="space-y-2">
               <div className="grid grid-cols-2 gap-2">
@@ -156,15 +184,43 @@ export default function EmbedMarketPage({ params }: { params: Promise<{ id: stri
                 inputMode="decimal"
                 placeholder="XLM amount"
               />
+              {payoutPreview && (
+                <p className="text-[10px] text-[var(--faint)]">
+                  You get <span className="font-semibold text-[var(--ink)]">{payoutPreview} XLM</span> if {side.toUpperCase()} wins
+                </p>
+              )}
               <Button
                 size="sm"
                 className="w-full"
                 variant={side === 'Yes' ? 'yes' : 'no'}
                 onClick={handleTrade}
-                disabled={busy || !state || !fee}
+                disabled={busy || connecting || !state || !fee || !payoutPreview}
               >
-                {busy ? 'Confirm with passkey…' : `Buy ${side}`}
+                {connecting
+                  ? creationStep
+                    ? STEP_LABEL[creationStep]
+                    : 'Setting up…'
+                  : busy
+                    ? wallet?.kind === 'email'
+                      ? 'Placing bet…'
+                      : 'Confirm with passkey…'
+                    : `Buy ${side}`}
               </Button>
+              {connecting ? (
+                <button
+                  type="button"
+                  onClick={cancelCreation}
+                  className="block w-full text-center text-[10px] text-[var(--faint)] underline"
+                >
+                  Cancel
+                </button>
+              ) : (
+                !wallet && (
+                  <p className="text-center text-[10px] text-[var(--faint)]">
+                    No XLM needed &mdash; just Face ID / Touch ID, the first time you buy
+                  </p>
+                )
+              )}
             </div>
           )}
 
@@ -174,6 +230,15 @@ export default function EmbedMarketPage({ params }: { params: Promise<{ id: stri
             >
               {txError ?? walletError ?? `Submitted: ${txResult}`}
             </p>
+          )}
+          {walletError && !wallet && !showEmailFallback && (
+            <button
+              type="button"
+              onClick={() => setPreferEmail(true)}
+              className="text-[10px] text-[var(--faint)] underline"
+            >
+              Try email instead
+            </button>
           )}
         </CardBody>
       </Card>

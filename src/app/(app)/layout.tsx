@@ -1,20 +1,19 @@
 'use client';
 
 import Link from 'next/link';
-import { useState } from 'react';
 import { useWallet } from '@/lib/wallet-provider';
-import { Button } from '@/components/ui/button';
-import { shortAddress } from '@/lib/format';
+import { usePortfolioValue } from '@/lib/use-portfolio-value';
+import { AuthControls } from '@/components/auth-controls';
+import { stroopsToXlm } from '@/lib/format';
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
-  const { wallet, connecting, error, createWallet } = useWallet();
-  const [name, setName] = useState('');
-  const [showNamePrompt, setShowNamePrompt] = useState(false);
+  const { wallet, error } = useWallet();
+  const portfolio = usePortfolioValue();
 
   return (
     <div className="min-h-screen">
       <header className="sticky top-0 z-10 border-b border-[var(--line)] bg-[var(--bg)]/90 backdrop-blur">
-        <div className="mx-auto flex max-w-5xl items-center justify-between px-4 py-3">
+        <div className="mx-auto flex max-w-5xl flex-wrap items-center justify-between gap-y-2 px-4 py-3">
           <Link href="/" className="flex items-center gap-2 font-bold text-lg">
             <span
               className="flex h-7 w-7 items-center justify-center rounded-lg text-white text-sm"
@@ -24,7 +23,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             </span>
             Polaris
           </Link>
-          <nav className="flex items-center gap-4 text-sm text-[var(--ink-soft)]">
+          <nav className="order-3 flex w-full basis-full items-center justify-center gap-4 text-sm text-[var(--ink-soft)] sm:order-none sm:w-auto sm:basis-auto sm:justify-start">
             <Link href="/" className="hover:text-[var(--ink)]">
               Markets
             </Link>
@@ -35,35 +34,16 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
               Docs
             </Link>
           </nav>
-          <div>
-            {wallet ? (
-              <span className="rounded-full bg-[var(--surface-2)] px-3 py-1.5 text-xs font-mono">
-                {shortAddress(wallet.address)}
-              </span>
-            ) : showNamePrompt ? (
-              <form
-                className="flex items-center gap-2"
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  void createWallet(name || 'polaris-bettor');
-                }}
+          <div className="flex items-center gap-2">
+            {wallet && portfolio?.hasPosition && (
+              <Link
+                href="/bets"
+                className="rounded-full bg-[var(--surface-2)] px-3 py-1.5 text-xs font-semibold hover:opacity-80"
               >
-                <input
-                  autoFocus
-                  className="h-8 w-32 rounded-lg border border-[var(--line)] bg-[var(--surface)] px-2 text-xs"
-                  placeholder="your name"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                />
-                <Button size="sm" type="submit" disabled={connecting}>
-                  {connecting ? 'Creating…' : 'Create passkey'}
-                </Button>
-              </form>
-            ) : (
-              <Button size="sm" onClick={() => setShowNamePrompt(true)}>
-                Sign in with passkey
-              </Button>
+                {stroopsToXlm(portfolio.total)} XLM in play
+              </Link>
             )}
+            <AuthControls />
           </div>
         </div>
         {error && (
