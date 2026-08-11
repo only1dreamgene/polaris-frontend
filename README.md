@@ -77,12 +77,45 @@ code they cover, importing the real functions under test rather than
 re-declaring the logic — see `amm.spec.ts`, `portfolio.spec.ts`,
 `webauthn.spec.ts`.
 
+## Verified live: the real WebAuthn path, not just the byte math
+
+Every other check of this flow up to this point verified the *signature
+math* (`webauthn.spec.ts`) or the *deploy/trade plumbing* (email login,
+which bypasses the browser ceremony entirely). Neither exercises
+`navigator.credentials.create()`/`.get()` themselves.
+
+Closed that gap by driving a real, headless Chromium instance (Playwright)
+against the actual running app, with Chrome DevTools Protocol's `WebAuthn`
+domain providing a virtual platform authenticator (ctap2, resident keys,
+user verification) — every layer above the literal fingerprint sensor is
+real: the browser's own WebAuthn implementation, `registerPasskey()` /
+`signWithPasskey()`, the real DER→raw-lowS conversion, the real backend
+relay, the real on-chain `__check_auth` verification.
+
+Result, clicking through the actual UI (sign in with passkey → buy YES):
+- A real wallet deployed and auto-funded on testnet through the *new,
+  fixed* factory (see `polaris-contracts/README.md`'s "Factory wasm
+  pinning").
+- A real signed trade: `tx/prepare` → a genuine WebAuthn assertion from
+  the virtual authenticator → `tx/submit` → confirmed on testnet,
+  `getTransaction` status `SUCCESS`.
+- The AMM pool and the wallet's own position moved by exactly the amounts
+  the UI predicted before the click.
+
+What's still outstanding after this is narrow: only the literal hardware
+prompt (a real Face ID/Touch ID/Windows Hello dialog) hasn't fired — an
+OS/browser-level interaction, not something this codebase's own logic
+could behave differently for.
+
 ## Known gaps
 
-- No end-to-end browser test of the actual WebAuthn `navigator.credentials`
-  flow — `webauthn.spec.ts` proves the byte-level signature conversion is
-  correct, but the full register→sign→submit path through a real
-  authenticator hasn't been exercised in this build environment.
+- The full register→sign→submit WebAuthn path *has* now been exercised
+  through a real browser, end to end against real testnet — see "Verified
+  live" below. What's still outstanding is narrower than "hasn't been
+  tested at all": a literal hardware authenticator (an actual Face
+  ID/Touch ID/Windows Hello prompt) hasn't pressed the button — that's an
+  OS/browser-level interaction this codebase's logic has no way to differ
+  on, not something CI or this build environment can exercise regardless.
 - Portfolio values are current-position marks, not historical realized P&L
   — see `lib/portfolio.ts`'s doc comment and the `/docs` page for why.
 - Cross-origin `navigator.credentials.get()` (signing with an existing
