@@ -52,6 +52,13 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
   const abortReasonRef = useRef<'timeout' | 'cancelled' | null>(null);
 
   useEffect(() => {
+    // Deliberately NOT a lazy useState initializer, despite what the
+    // set-state-in-effect lint rule suggests: this provider wraps
+    // server-rendered pages, and `PublicKeyCredential` only exists
+    // client-side. Reading it in the initializer would make the client's
+    // first hydration pass render different WebAuthn-gated UI than the
+    // server did — a real hydration mismatch, not just an extra render.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setWebauthnSupported(typeof window !== 'undefined' && 'PublicKeyCredential' in window);
 
     const stored = loadStoredWallet();

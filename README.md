@@ -20,10 +20,10 @@ remaining role for Freighter to play, so it isn't a dependency here.
 
 | Path | Purpose |
 |---|---|
-| `lib/webauthn.ts` | Passkey register/sign. The one piece of real crypto math here: browsers return DER-encoded, non-normalized ECDSA signatures; the contract needs raw r‖s, low-S normalized. Verified with `scripts/verify-webauthn-math.mjs` (real keypairs, real signatures, no browser needed). |
+| `lib/webauthn.ts` | Passkey register/sign. The one piece of real crypto math here: browsers return DER-encoded, non-normalized ECDSA signatures; the contract needs raw r‖s, low-S normalized. Verified in `webauthn.spec.ts` (real keypairs, real signatures, no browser needed). |
 | `lib/passkey-wallet.ts` | Orchestrates onboarding (register passkey → backend deploys a smart wallet) and the two-step sponsored-transaction flow (prepare → sign → submit). |
-| `lib/portfolio.ts` | Mirrors the contract's redemption math for position values. Verified with `scripts/verify-portfolio-math.mts`. |
-| `lib/amm.ts` | Mirrors the contract's constant-product swap math, to give `buy` a real slippage floor. `min_shares_out` had been hardcoded to `0` — no slippage protection at all — until pressure-testing this system caught it. Verified with `scripts/verify-amm-math.mts`. |
+| `lib/portfolio.ts` | Mirrors the contract's redemption math for position values. Verified in `portfolio.spec.ts` — this mirror had gone stale relative to a contract-side fix once already (see "Known gaps"), which is exactly the kind of drift a real test catches and a standalone script someone forgets to re-run doesn't. |
+| `lib/amm.ts` | Mirrors the contract's constant-product swap math, to give `buy` a real slippage floor. `min_shares_out` had been hardcoded to `0` — no slippage protection at all — until pressure-testing this system caught it. Verified in `amm.spec.ts`. |
 | `lib/api.ts` | Typed client for every `polaris-oracle` endpoint this app uses. |
 | `app/(app)/*` | Dashboard, market detail + trade form, portfolio, admin console — share the topbar shell in `(app)/layout.tsx`. |
 | `app/docs/` | Public docs page, outside the `(app)` route group so it renders without the app chrome. |
@@ -59,25 +59,30 @@ npm install
 npm run dev      # http://localhost:3000
 ```
 
-## Verifying the pure-logic pieces
-
-This app ships no test framework (a deliberate choice matching the rest of
-this system's scoping — see the other repos' READMEs for their own
-boundaries). The pieces of non-trivial logic are verified as standalone
-scripts instead:
+## Testing
 
 ```sh
-node scripts/verify-webauthn-math.mjs      # DER→raw + low-S signature conversion
-node --experimental-strip-types scripts/verify-portfolio-math.mts   # redemption/mark-to-market math
-node --experimental-strip-types scripts/verify-amm-math.mts         # buy price-impact estimate, cross-checked against the contract's own hand-computed values
+npm test          # vitest run — amm.spec.ts, portfolio.spec.ts, webauthn.spec.ts
 ```
+
+This ran with no test framework at all until an audit pass added one — the
+pure-logic pieces (AMM math, redemption math, the WebAuthn signature
+conversion) had been verified with hand-run standalone scripts instead.
+Those worked, but nothing forced them to be re-run: `lib/portfolio.ts`'s
+mirror of the contract's redemption math drifted out of sync with a real
+contract fix (`polaris-contracts`' cancelled-market payout formula changed;
+this file didn't) for one full pass before a real test caught it. The
+scripts are gone now, migrated into `*.spec.ts` files colocated with the
+code they cover, importing the real functions under test rather than
+re-declaring the logic — see `amm.spec.ts`, `portfolio.spec.ts`,
+`webauthn.spec.ts`.
 
 ## Known gaps
 
 - No end-to-end browser test of the actual WebAuthn `navigator.credentials`
-  flow — `verify-webauthn-math.mjs` proves the byte-level signature
-  conversion is correct, but the full register→sign→submit path through a
-  real authenticator hasn't been exercised in this build environment.
+  flow — `webauthn.spec.ts` proves the byte-level signature conversion is
+  correct, but the full register→sign→submit path through a real
+  authenticator hasn't been exercised in this build environment.
 - Portfolio values are current-position marks, not historical realized P&L
   — see `lib/portfolio.ts`'s doc comment and the `/docs` page for why.
 - Cross-origin `navigator.credentials.get()` (signing with an existing

@@ -1,6 +1,6 @@
 export function OddsBar({ yesBps, noBps }: { yesBps: number; noBps: number }) {
   const yesPct = Math.round(yesBps / 100);
-  const noPct = 100 - yesPct;
+  const noPct = Math.round(noBps / 100);
 
   return (
     <div>

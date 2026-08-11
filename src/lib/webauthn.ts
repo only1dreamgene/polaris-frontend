@@ -153,8 +153,8 @@ function spkiToRawEcPoint(spki: Uint8Array): Uint8Array {
   return point;
 }
 
-/** DER `30 len 02 rlen r 02 slen s` → raw 32-byte r ‖ 32-byte s, s normalized to low-S. */
-function derToRawLowS(der: Uint8Array): Uint8Array {
+/** DER `30 len 02 rlen r 02 slen s` → raw 32-byte r ‖ 32-byte s, s normalized to low-S. Exported for direct testing — see `webauthn.spec.ts`. */
+export function derToRawLowS(der: Uint8Array): Uint8Array {
   let offset = 0;
   if (der[offset++] !== 0x30) throw new Error('malformed signature: expected DER SEQUENCE');
   offset++; // total length (always short-form for a P-256 ECDSA signature)

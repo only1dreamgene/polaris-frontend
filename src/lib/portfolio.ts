@@ -30,7 +30,18 @@ export function redeemableValue(status: MarketStatus, position: Position): bigin
     case 'ResolvedNo':
       return position.no;
     case 'Cancelled':
-      return position.yes + position.no;
+      // NOT position.yes + position.no: sum(all YES balances) == total_supply
+      // and sum(all NO balances) == total_supply are both independently true
+      // (same number) — the contract only ever holds one total_supply's
+      // worth of real collateral, not two. redeem() on a cancelled market
+      // pays 0.5 per share held on either side for exactly this reason (see
+      // polaris-contracts/README.md's "Cancellation payout" section, and the
+      // bug it documents from paying both sides in full). This mirror had
+      // gone stale relative to that fix until this was caught while adding
+      // real test coverage — worth remembering: a "mirrors X exactly" claim
+      // needs a test tying it to X's *current* behavior, not just to
+      // whatever X did when this was written.
+      return (position.yes + position.no) / 2n;
   }
 }
 

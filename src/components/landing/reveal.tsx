@@ -21,7 +21,15 @@ export function Reveal({
   const [visible, setVisible] = useState(false);
 
   useEffect(() => {
+    // Deliberately NOT a lazy useState initializer, despite what the
+    // set-state-in-effect lint rule suggests: this section is
+    // server-rendered first (visible=false, matching what the server can
+    // know), and matchMedia is only readable client-side. Reading it in the
+    // initializer would make the client's first hydration pass render a
+    // different opacity/transform than the server did — a real hydration
+    // mismatch, not just an extra render.
     if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setVisible(true);
       return;
     }
