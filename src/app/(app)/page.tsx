@@ -1,86 +1,105 @@
 'use client';
 
+import { useState } from 'react';
 import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { Card, CardBody } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { OddsBar } from '@/components/odds-bar';
+import { TradeCard } from '@/components/trade-card';
 import { centsToUsd, formatCountdown, statusLabel } from '@/lib/format';
+import { rankMarkets } from '@/lib/rank-markets';
 
-function statusTone(status: string): 'yes' | 'no' | 'warn' | 'neutral' {
-  if (status === 'settled') return 'yes';
-  if (status === 'cancelled') return 'no';
-  if (status === 'pending') return 'warn';
-  return 'neutral';
-}
-
-function MarketCard({ contractId }: { contractId: string }) {
-  const { data: market } = useQuery({
-    queryKey: ['market', contractId],
-    queryFn: () => api.getMarket(contractId),
-  });
-  const { data: price } = useQuery({
-    queryKey: ['price', contractId],
-    queryFn: () => api.getPrice(contractId),
-    enabled: market?.status === 'watching',
-    refetchInterval: 15_000,
-  });
-
-  if (!market) return null;
-
-  return (
-    <Link href={`/market/${contractId}`}>
-      <Card className="transition-shadow hover:shadow-md">
-        <CardBody>
-          <div className="mb-2 flex items-center justify-between">
-            <span className="text-xs font-semibold uppercase tracking-wide text-[var(--faint)]">
-              XLM/USD
-            </span>
-            <Badge tone={statusTone(market.status)}>{statusLabel(market.status)}</Badge>
-          </div>
-          <h3 className="mb-3 text-lg font-semibold">
-            Will XLM be ≥ {centsToUsd(market.strikePriceCents)} by expiry?
-          </h3>
-          {price ? (
-            <OddsBar yesBps={price.yesBps} noBps={price.noBps} />
-          ) : (
-            <div className="h-2 w-full rounded-full bg-[var(--surface-2)]" />
-          )}
-          <div className="mt-3 text-xs text-[var(--muted)]">
-            {market.status === 'watching' ? `closes in ${formatCountdown(market.expiry)}` : 'closed'}
-          </div>
-        </CardBody>
-      </Card>
-    </Link>
-  );
-}
-
-export default function DashboardPage() {
+/**
+ * The primary landing experience: one open market, featured full-width,
+ * tradeable without leaving this page — not a grid of everything. Ranked by
+ * `rankMarkets` (soonest-to-expire first for now; see that file's doc
+ * comment for why). The full grid still exists at `/markets`, linked from
+ * here, not deleted.
+ */
+export default function HomePage() {
   const { data: markets, isLoading, error } = useQuery({
     queryKey: ['markets'],
     queryFn: api.listMarkets,
     refetchInterval: 30_000,
   });
+  const [featuredIndex, setFeaturedIndex] = useState(0);
+
+  const ranked = markets ? rankMarkets(markets) : [];
+  const featured = ranked.length > 0 ? ranked[featuredIndex % ranked.length] : null;
+
+  const { data: price } = useQuery({
+    queryKey: ['price', featured?.contractId],
+    queryFn: () => api.getPrice(featured!.contractId),
+    enabled: !!featured,
+    refetchInterval: 15_000,
+  });
+
+  if (isLoading) {
+    return <p className="text-sm text-[var(--muted)]">Loading markets…</p>;
+  }
+  if (error) {
+    return <p className="text-sm text-[var(--no)]">Couldn&rsquo;t reach the backend: {(error as Error).message}</p>;
+  }
+  if (!featured) {
+    return (
+      <div>
+        <h1 className="mb-2 text-2xl font-bold">No open markets right now</h1>
+        <p className="mb-4 text-sm text-[var(--muted)]">
+          Nothing&rsquo;s currently taking bets. Check what&rsquo;s already settled, or create a new one.
+        </p>
+        <Link href="/markets" className="text-sm font-semibold text-[var(--accent-ink)] hover:underline">
+          See all markets →
+        </Link>
+      </div>
+    );
+  }
 
   return (
     <div>
-      <h1 className="mb-1 text-2xl font-bold">Markets</h1>
-      <p className="mb-6 text-sm text-[var(--muted)]">
-        Bet YES or NO on where XLM&rsquo;s price lands. You can never lose more than you stake &mdash;
-        your funds sit on-chain, untouched by anyone, until the market settles.
-      </p>
+      <div className="mb-6 flex items-center justify-between">
+        <span className="text-xs font-semibold uppercase tracking-wide text-[var(--faint)]">XLM/USD</span>
+        {ranked.length > 1 && (
+          <button
+            type="button"
+            onClick={() => setFeaturedIndex((i) => i + 1)}
+            className="text-xs font-semibold text-[var(--muted)] hover:text-[var(--ink)]"
+          >
+            Next market ({ranked.length - 1} more) →
+          </button>
+        )}
+      </div>
 
-      {isLoading && <p className="text-sm text-[var(--muted)]">Loading markets…</p>}
-      {error && <p className="text-sm text-[var(--no)]">Couldn&rsquo;t reach the backend: {(error as Error).message}</p>}
-      {markets && markets.length === 0 && (
-        <p className="text-sm text-[var(--muted)]">No markets yet — an admin can create one from /create.</p>
-      )}
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+        <div className="lg:col-span-2">
+          <div className="mb-3">
+            <Badge>{statusLabel(featured.status)}</Badge>
+          </div>
+          <h1 className="mb-4 text-3xl font-bold text-balance">
+            Will XLM be ≥ {centsToUsd(featured.strikePriceCents)} by expiry?
+          </h1>
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {markets?.map((m) => (
-          <MarketCard key={m.contractId} contractId={m.contractId} />
-        ))}
+          {price && (
+            <Card className="mb-4">
+              <CardBody>
+                <OddsBar yesBps={price.yesBps} noBps={price.noBps} />
+              </CardBody>
+            </Card>
+          )}
+
+          <p className="text-sm text-[var(--muted)]">closes in {formatCountdown(featured.expiry)}</p>
+        </div>
+
+        <div>
+          <TradeCard marketId={featured.contractId} />
+        </div>
+      </div>
+
+      <div className="mt-10 border-t border-[var(--line)] pt-4 text-center">
+        <Link href="/markets" className="text-sm text-[var(--muted)] hover:text-[var(--ink)] hover:underline">
+          Browse all markets →
+        </Link>
       </div>
     </div>
   );
