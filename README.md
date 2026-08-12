@@ -51,6 +51,17 @@ Two things about it are load-bearing, not incidental:
    response-side `Permissions-Policy` header to match, but that's the other
    half of the handshake, not a substitute for the `allow` attribute.
 
+**Bundle size, measured rather than assumed:** loading `/embed/[id]` in a
+real browser transfers ~562kb (~524kb JS) total; `/market/[id]` is actually
+*larger* (~623kb/~559kb), mostly from Next's automatic prefetching of the
+nav's other routes, which the embed doesn't have. The two biggest chunks
+(~379kb combined, byte-identical between routes) are shared React/Next.js
+runtime and polyfills present on every route regardless of what it
+imports — not `@tanstack/react-query` or the Stellar SDK, both checked and
+ruled out by grepping the built chunks directly. There isn't a low-risk
+trim available here; meaningfully shrinking it further would mean not
+sharing Next's client runtime for this route at all, a materially bigger
+change than "remove an unused import."
 ## Running
 
 ```sh
