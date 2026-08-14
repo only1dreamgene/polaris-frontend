@@ -13,7 +13,7 @@ import { LandingFooter } from '@/components/landing/landing-footer';
 export const metadata: Metadata = {
   title: 'Polaris — Predict XLM. No wallet required.',
   description:
-    'A trustless, fully-collateralized prediction market on XLM/USD, settled on-chain by Pyth. Sign in with a passkey — no browser extension, no seed phrase.',
+    'A fully-collateralized prediction market on XLM/USD, settled automatically by a live price feed. Sign in with a passkey — no browser extension, no seed phrase.',
 };
 
 export default function WelcomePage() {

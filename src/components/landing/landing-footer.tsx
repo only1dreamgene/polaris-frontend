@@ -17,7 +17,7 @@ export function LandingFooter() {
               Polaris
             </Link>
             <p className="mt-3 text-sm leading-relaxed text-[var(--muted)]">
-              A trustless prediction market on XLM/USD, settled on-chain by Pyth.
+              A fully-collateralized prediction market on XLM/USD, settled automatically by a live price feed.
             </p>
           </div>
 

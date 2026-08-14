@@ -2,14 +2,14 @@
 
 import { use, useMemo, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { api } from '@/lib/api';
+import { api, messageFromApiError } from '@/lib/api';
 import { useWallet } from '@/lib/wallet-provider';
 import { callAsWallet } from '@/lib/passkey-wallet';
 import { Card, CardBody } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { OddsBar } from '@/components/odds-bar';
 import { AuthControls } from '@/components/auth-controls';
-import { centsToUsd, statusLabel, stroopsToXlm, xlmToStroops } from '@/lib/format';
+import { centsToUsd, statusLabel, stroopsToXlm, xlmToStroops, shortAddress } from '@/lib/format';
 import { estimateBuyOut, withSlippageTolerance } from '@/lib/amm';
 
 const SLIPPAGE_TOLERANCE_BPS = 200; // 2%
@@ -122,7 +122,7 @@ export default function EmbedMarketPage({ params }: { params: Promise<{ id: stri
       setTxResult(txHash);
       await queryClient.invalidateQueries({ queryKey: ['price', id] });
     } catch (err) {
-      setTxError((err as Error).message);
+      setTxError(messageFromApiError(err));
     } finally {
       setBusy(false);
     }
@@ -154,7 +154,7 @@ export default function EmbedMarketPage({ params }: { params: Promise<{ id: stri
             XLM ≥ {centsToUsd(market.strikePriceCents)}?
           </h2>
           <p className="-mt-1.5 text-[10px] text-[var(--faint)]">
-            Can&rsquo;t lose more than you stake &mdash; funds held on-chain until settled.
+            Can&rsquo;t lose more than you stake &mdash; funds are locked until the market settles.
           </p>
 
           {price && <OddsBar yesBps={price.yesBps} noBps={price.noBps} />}
@@ -226,9 +226,13 @@ export default function EmbedMarketPage({ params }: { params: Promise<{ id: stri
 
           {(txResult || txError || walletError) && (
             <p
-              className={`break-all text-[10px] ${txError || walletError ? 'text-[var(--no)]' : 'text-[var(--yes)]'}`}
+              className={`text-[10px] ${txError || walletError ? 'text-[var(--no)] break-all' : 'text-[var(--yes)]'}`}
             >
-              {txError ?? walletError ?? `Submitted: ${txResult}`}
+              {txError ?? walletError ?? (
+                <>
+                  Confirmed <span className="text-[var(--faint)]">— ref {shortAddress(txResult!)}</span>
+                </>
+              )}
             </p>
           )}
           {walletError && !wallet && !showEmailFallback && (

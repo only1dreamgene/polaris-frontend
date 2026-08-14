@@ -2,12 +2,12 @@
 
 import { useMemo, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { api } from '@/lib/api';
+import { api, messageFromApiError } from '@/lib/api';
 import { useWallet } from '@/lib/wallet-provider';
 import { callAsWallet } from '@/lib/passkey-wallet';
 import { Card, CardBody } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { stroopsToXlm, xlmToStroops } from '@/lib/format';
+import { stroopsToXlm, xlmToStroops, shortAddress } from '@/lib/format';
 import { redeemableValue, type MarketStatus } from '@/lib/portfolio';
 import { estimateBuyOut, withSlippageTolerance } from '@/lib/amm';
 
@@ -16,7 +16,7 @@ const SLIPPAGE_TOLERANCE_BPS = 200;
 
 const STEP_LABEL: Record<string, string> = {
   passkey: 'Confirm with Face ID / Touch ID…',
-  deploying: 'Setting up your account on-chain…',
+  deploying: 'Setting up your account…',
   done: 'Ready',
 };
 
@@ -125,7 +125,7 @@ export function TradeCard({
         queryClient.invalidateQueries({ queryKey: ['price', marketId] }),
       ]);
     } catch (err) {
-      setTxError((err as Error).message);
+      setTxError(messageFromApiError(err));
     } finally {
       setBusy(false);
     }
@@ -141,7 +141,7 @@ export function TradeCard({
       setTxResult(txHash);
       await queryClient.invalidateQueries({ queryKey: ['position', marketId, wallet.address] });
     } catch (err) {
-      setTxError((err as Error).message);
+      setTxError(messageFromApiError(err));
     } finally {
       setBusy(false);
     }
@@ -234,7 +234,11 @@ export function TradeCard({
             Your position: {stroopsToXlm(pos.yes)} YES / {stroopsToXlm(pos.no)} NO
           </div>
         )}
-        {txResult && <p className="mt-3 text-xs text-[var(--yes)] break-all">Submitted: {txResult}</p>}
+        {txResult && (
+          <p className="mt-3 text-xs text-[var(--yes)]">
+            Confirmed <span className="text-[var(--faint)]">— ref {shortAddress(txResult)}</span>
+          </p>
+        )}
         {(txError || walletError) && (
           <p className="mt-3 text-xs text-[var(--no)] break-all">{txError ?? walletError}</p>
         )}

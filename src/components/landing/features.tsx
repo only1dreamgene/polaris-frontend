@@ -4,7 +4,7 @@ import { Reveal } from './reveal';
 const FEATURES: { title: string; body: string; icon: React.ReactNode }[] = [
   {
     title: 'Passkey sign-in',
-    body: 'Your device’s biometrics authorize a Soroban smart wallet directly — no extension, no browser plugin.',
+    body: 'Your device’s biometrics unlock a secure passkey account directly — no extension, no browser plugin, no seed phrase to lose.',
     icon: (
       <path d="M12 2a5 5 0 0 0-5 5v2H6a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-9a2 2 0 0 0-2-2h-1V7a5 5 0 0 0-5-5Zm-3 7V7a3 3 0 1 1 6 0v2Zm3 4a2 2 0 1 1 0 4a2 2 0 0 1 0-4Z" />
     ),

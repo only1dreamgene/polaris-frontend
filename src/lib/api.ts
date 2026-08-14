@@ -18,6 +18,19 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return res.json() as Promise<T>;
 }
 
+/** `request()` above throws a generic `METHOD /path failed: 400 {...}` error — pull the backend's own message out of the JSON body when possible instead of showing that raw text to a user. */
+export function messageFromApiError(err: unknown): string {
+  const message = err instanceof Error ? err.message : 'Something went wrong. Please try again.';
+  const jsonStart = message.indexOf('{');
+  if (jsonStart === -1) return message;
+  try {
+    const body = JSON.parse(message.slice(jsonStart)) as { message?: string };
+    return body.message ?? message;
+  } catch {
+    return message;
+  }
+}
+
 export interface WatchedMarket {
   contractId: string;
   strikePriceCents: string;

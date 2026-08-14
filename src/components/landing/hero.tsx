@@ -16,7 +16,7 @@ export function Hero() {
       <div className="relative mx-auto grid max-w-6xl gap-12 px-5 pb-20 pt-16 sm:px-8 sm:pt-24 lg:grid-cols-2 lg:items-center lg:pb-28 lg:pt-32">
         <div>
           <p className="mb-4 inline-flex items-center gap-2 rounded-full border border-[var(--line)] bg-[var(--surface)] px-3 py-1 text-xs font-semibold uppercase tracking-wide text-[var(--accent-ink)]">
-            Trustless · Built on Stellar
+            Fully collateralized · No house edge
           </p>
 
           <h1 className="text-balance text-[clamp(2.25rem,5.5vw,3.75rem)] font-extrabold leading-[1.05] tracking-tight text-[var(--ink)]">
@@ -26,9 +26,9 @@ export function Hero() {
           </h1>
 
           <p className="mt-6 max-w-xl text-pretty text-lg leading-relaxed text-[var(--ink-soft)]">
-            Polaris is a fully-collateralized prediction market settled on-chain by Pyth.
-            Sign in with Face ID or Touch ID — no browser extension, no seed phrase — and
-            trade live, AMM-priced odds instead of locking in a static bet.
+            Polaris is a fully-collateralized prediction market, settled automatically by a
+            live price feed. Sign in with Face ID or Touch ID — no browser extension, no seed
+            phrase — and trade live, AMM-priced odds instead of locking in a static bet.
           </p>
 
           <div className="mt-9 flex flex-wrap items-center gap-4">

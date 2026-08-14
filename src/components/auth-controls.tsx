@@ -7,7 +7,7 @@ import { shortAddress } from '@/lib/format';
 
 const STEP_LABEL: Record<string, string> = {
   passkey: 'Confirm with Face ID / Touch ID…',
-  deploying: 'Setting up your account on-chain…',
+  deploying: 'Setting up your account…',
   done: 'Ready',
 };
 

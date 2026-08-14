@@ -9,7 +9,7 @@ import {
   type WalletCreationStep,
 } from './passkey-wallet';
 import { humanizeWebAuthnError } from './webauthn';
-import { api } from './api';
+import { api, messageFromApiError } from './api';
 
 /** How long we wait for the passkey ceremony before giving up and surfacing a recoverable error — see the abort logic in `createWallet`. */
 const CREATION_TIMEOUT_MS = 20_000;
@@ -191,15 +191,3 @@ export function useWallet(): WalletContextValue {
   return ctx;
 }
 
-/** `api.ts`'s `request()` throws a generic `METHOD /path failed: 400 {...}` error — pull the backend's own message out of the JSON body when possible instead of showing that raw text. */
-function messageFromApiError(err: unknown): string {
-  const message = err instanceof Error ? err.message : 'Something went wrong. Please try again.';
-  const jsonStart = message.indexOf('{');
-  if (jsonStart === -1) return message;
-  try {
-    const body = JSON.parse(message.slice(jsonStart)) as { message?: string };
-    return body.message ?? message;
-  } catch {
-    return message;
-  }
-}

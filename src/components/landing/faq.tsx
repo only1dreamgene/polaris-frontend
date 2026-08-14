@@ -11,11 +11,11 @@ const QUESTIONS = [
   },
   {
     q: 'Do I need to already own crypto?',
-    a: "No wallet, no seed phrase, and no XLM required just to sign in — a passkey (Face ID, Touch ID, or a hardware key) creates your Soroban smart wallet for you. You'll need a small amount of XLM to actually trade.",
+    a: "No wallet, no seed phrase, and no XLM required just to sign in — a passkey (Face ID, Touch ID, or a hardware key) creates a secure passkey account for you. You'll need a small amount of XLM to actually trade.",
   },
   {
     q: 'Is my money safe?',
-    a: 'Every position is fully collateralized on-chain — funds only ever move through the market contract itself, never through an admin key. The contracts are open source; see the docs for the full trust model and known limitations.',
+    a: 'Every position is fully collateralized — funds only ever move automatically, based on the market’s own rules, never through an admin key. The contracts are open source; see the docs for the full trust model and known limitations.',
   },
 ];
 

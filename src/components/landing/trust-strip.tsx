@@ -1,7 +1,7 @@
 const ITEMS = [
   'Fully collateralized',
-  'Settled by Pyth',
-  'Built on Stellar',
+  'Settled by a live price feed',
+  'No house edge',
   'No seed phrase',
 ];
 
