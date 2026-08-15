@@ -29,6 +29,8 @@ remaining role for Freighter to play, so it isn't a dependency here.
 | `app/docs/` | Public docs page, outside the `(app)` route group so it renders without the app chrome. |
 | `app/embed/[id]/` | The embeddable market widget — see "Embedding a market" below. Also outside `(app)`, no app chrome, minimal bundle. |
 | `components/embed-code-button.tsx` | Generates the `<iframe>` snippet shown on the market detail page. |
+| `components/result-reveal.tsx` | The one deliberate "moment" in this app — see "The result-reveal moment" below. |
+| `lib/format.ts` | Centralizes amount/status/address formatting (`stroopsToXlm`, `centsToUsd`, `shortAddress`, `statusLabel`) and the resolution-polling helpers (`isPollableStatus`, `RESOLUTION_POLL_MS`). Every amount/address display in the app already routed through this before this round — confirmed by an explicit audit, not assumed — so making the blockchain invisible (below) was a vocabulary pass, not a formatting rewrite. |
 
 ## Embedding a market
 
@@ -62,6 +64,79 @@ ruled out by grepping the built chunks directly. There isn't a low-risk
 trim available here; meaningfully shrinking it further would mean not
 sharing Next's client runtime for this route at all, a materially bigger
 change than "remove an unused import."
+## Making the blockchain invisible
+
+An audit (not a guess) of every place blockchain vocabulary or a raw
+on-chain value reached end-user UI found the formatting layer was already
+clean (`lib/format.ts`, consistently used everywhere) — the actual gaps were
+vocabulary and two small real bugs, both fixed in this pass:
+
+- `trade-card.tsx` and `embed/[id]/page.tsx` set their error state from the
+  raw thrown error instead of `messageFromApiError` (`lib/api.ts`'s
+  unwrapper, already used by `wallet-provider.tsx` — now shared from one
+  place instead of a second inline copy), meaning a raw `400 {...}` or
+  on-chain revert string could reach a user on the one path that skipped it.
+- Both also rendered a full, unlinked transaction hash as `Submitted:
+  {txResult}` after a trade/redeem — replaced with `Confirmed — ref
+  {shortAddress(txResult)}`.
+- Copy sweep: "on-chain", "Soroban", and "Built on Stellar" language removed
+  from end-user-facing strings (landing page, trade card, embed) in favor of
+  the same true facts stated as outcomes ("settled automatically by a live
+  price feed" instead of "settled on-chain by Pyth"). XLM amounts are left
+  exactly as they were — that's real financial information the user is
+  risking, not implementation detail to hide. The `/docs` page is
+  deliberately untouched: its whole purpose is transparency for anyone who
+  wants to verify the trust model, the same reason a whitepaper link isn't
+  part of a main app's copy pass.
+
+## The result-reveal moment
+
+The one deliberate "moment" in this app: what a bettor sees the instant
+their market resolves, rather than a plain "Trading is closed" line. Two
+things had to be true before an animation was the right thing to add, both
+confirmed by an audit before writing any component:
+
+1. **The transition actually had to be caught.** `market`/`state` queries
+   had no `refetchInterval` once a market left `'watching'` — a user sitting
+   on the page at the moment of resolution saw nothing change until they
+   navigated away and back. Fixed with a function-form `refetchInterval`
+   (`isPollableStatus`/`RESOLUTION_POLL_MS` in `lib/format.ts`, 8s) that
+   polls while a market is `'watching'`/`'pending'` and stops once it's
+   genuinely terminal. This is short-interval polling, not real push — no
+   websocket/SSE exists in `polaris-oracle` — stated plainly rather than
+   oversold; it's frequent enough to feel near-instant around an expiry
+   without polling forever.
+2. **The decision logic already existed and had to be reused, not
+   re-derived.** `ResultReveal` computes win/loss/refund via the *existing*
+   `didWin()`/`redeemableValue()` in `lib/portfolio.ts` — a second copy of
+   that math is exactly the failure mode that file's own doc comment warns
+   about (see "Known gaps": it drifted out of sync with a real contract fix
+   once already).
+
+The embed page gets the same component (`compact` prop, smaller treatment)
+rather than a third copy of this logic — consistent with this app's earlier
+decision not to fork the trade flow itself between the two surfaces.
+
+**Verified live on testnet**, both halves:
+- **Render correctness**: a real wallet with a real, nonzero position on a
+  market that had already resolved to `Cancelled` showed exactly `"Market
+  cancelled" / "Refunded 4.15 XLM"` — matching `redeemableValue`'s
+  half-per-share cancellation payout math precisely (8.31 XLM staked → 4.15
+  refunded).
+- **The live, no-reload transition**: a real email-login wallet bought a
+  real position, the page was left open (no reload, no navigation) through
+  the market's real expiry and grace period, and the transition was caught
+  by the polling above rather than requiring a manual refresh.
+
+One honest note from doing this live rather than assuming it: every step of
+this chain (custodial wallet deploy, trade confirmation, expiry, grace,
+cancel) is a real testnet operation, and each one routinely took anywhere
+from ~15s to ~90s in this environment — nothing to do with this feature,
+the same testnet latency `polaris-oracle/README.md`'s bugs 6–8 already
+document. A verification script that doesn't budget generously for that
+will look like a bug in the reveal when the actual cause is just an
+impatient test.
+
 ## Running
 
 ```sh
