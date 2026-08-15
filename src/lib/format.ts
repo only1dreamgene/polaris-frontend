@@ -51,3 +51,11 @@ const STATUS_LABELS: Record<string, string> = {
 export function statusLabel(status: string): string {
   return STATUS_LABELS[status] ?? status;
 }
+
+/** While a tracked market is still open or mid-settlement, worth polling frequently so a resolution is caught within seconds instead of on next page load — see `components/result-reveal.tsx`. Once genuinely terminal (settled/cancelled), nothing about it changes again, so polling stops. */
+export function isPollableStatus(status: string | undefined): boolean {
+  return status === 'watching' || status === 'pending';
+}
+
+/** Short-interval polling isn't real push (no websocket/SSE exists) — frequent enough to feel near-instant around an expiry without hammering the backend indefinitely. */
+export const RESOLUTION_POLL_MS = 8_000;

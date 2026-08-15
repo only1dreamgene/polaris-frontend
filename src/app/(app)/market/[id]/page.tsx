@@ -8,12 +8,16 @@ import { Badge } from '@/components/ui/badge';
 import { OddsBar } from '@/components/odds-bar';
 import { EmbedCodeButton } from '@/components/embed-code-button';
 import { TradeCard } from '@/components/trade-card';
-import { centsToUsd, formatCountdown, statusLabel, stroopsToXlm } from '@/lib/format';
+import { centsToUsd, formatCountdown, statusLabel, stroopsToXlm, isPollableStatus, RESOLUTION_POLL_MS } from '@/lib/format';
 
 export default function MarketDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
 
-  const { data: market } = useQuery({ queryKey: ['market', id], queryFn: () => api.getMarket(id) });
+  const { data: market } = useQuery({
+    queryKey: ['market', id],
+    queryFn: () => api.getMarket(id),
+    refetchInterval: (query) => (isPollableStatus(query.state.data?.status) ? RESOLUTION_POLL_MS : false),
+  });
   const { data: price } = useQuery({
     queryKey: ['price', id],
     queryFn: () => api.getPrice(id),
@@ -23,6 +27,7 @@ export default function MarketDetailPage({ params }: { params: Promise<{ id: str
   const { data: state } = useQuery({
     queryKey: ['state', id],
     queryFn: () => api.getMarketState(id),
+    refetchInterval: isPollableStatus(market?.status) ? RESOLUTION_POLL_MS : false,
   });
   const { data: fee } = useQuery({
     queryKey: ['fee', id],

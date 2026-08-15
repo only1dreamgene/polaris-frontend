@@ -7,9 +7,11 @@ import { useWallet } from '@/lib/wallet-provider';
 import { callAsWallet } from '@/lib/passkey-wallet';
 import { Card, CardBody } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { stroopsToXlm, xlmToStroops, shortAddress } from '@/lib/format';
+import { ResultReveal } from '@/components/result-reveal';
+import { stroopsToXlm, xlmToStroops, shortAddress, isPollableStatus, RESOLUTION_POLL_MS } from '@/lib/format';
 import { redeemableValue, type MarketStatus } from '@/lib/portfolio';
 import { estimateBuyOut, withSlippageTolerance } from '@/lib/amm';
+import { useNextRound } from '@/lib/use-next-round';
 
 /** 2% — how much worse a fill is allowed to be than the quote at click-time before the trade reverts instead of silently eating the difference. */
 const SLIPPAGE_TOLERANCE_BPS = 200;
@@ -52,10 +54,18 @@ export function TradeCard({
   const [txResult, setTxResult] = useState<string | null>(null);
   const [txError, setTxError] = useState<string | null>(null);
 
-  const { data: market } = useQuery({ queryKey: ['market', marketId], queryFn: () => api.getMarket(marketId) });
+  const { data: market } = useQuery({
+    queryKey: ['market', marketId],
+    queryFn: () => api.getMarket(marketId),
+    // Keeps polling while a resolution could still land, so a bettor sitting
+    // on this card sees it happen instead of only on next page load — see
+    // result-reveal.tsx for the moment this feeds.
+    refetchInterval: (query) => (isPollableStatus(query.state.data?.status) ? RESOLUTION_POLL_MS : false),
+  });
   const { data: state } = useQuery({
     queryKey: ['state', marketId],
     queryFn: () => api.getMarketState(marketId),
+    refetchInterval: isPollableStatus(market?.status) ? RESOLUTION_POLL_MS : false,
   });
   const { data: fee } = useQuery({
     queryKey: ['fee', marketId],
@@ -68,6 +78,7 @@ export function TradeCard({
     queryFn: () => api.getPosition(marketId, wallet!.address),
     enabled: !!wallet,
   });
+  const nextRound = useNextRound(market);
 
   const payoutPreview = useMemo(() => {
     if (!state || !fee) return null;
@@ -155,10 +166,16 @@ export function TradeCard({
     <Card className={className}>
       <CardBody className={bodyClassName}>
         {!isOpen ? (
-          <div>
-            <p className="mb-3 text-sm text-[var(--muted)]">
-              Trading is closed. {pos && (pos.yes > 0n || pos.no > 0n) ? 'You can redeem your position.' : ''}
-            </p>
+          <div className="space-y-3">
+            {pos && (pos.yes > 0n || pos.no > 0n) && onChainStatus && onChainStatus !== 'Open' ? (
+              <ResultReveal
+                status={onChainStatus}
+                position={pos}
+                nextRoundHref={nextRound ? `/market/${nextRound.contractId}` : undefined}
+              />
+            ) : (
+              <p className="text-sm text-[var(--muted)]">Trading is closed.</p>
+            )}
             {canRedeem && (
               <Button className="w-full" onClick={handleRedeem} disabled={busy}>
                 {busy ? 'Redeeming…' : 'Redeem'}

@@ -9,8 +9,19 @@ import { Card, CardBody } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { OddsBar } from '@/components/odds-bar';
 import { AuthControls } from '@/components/auth-controls';
-import { centsToUsd, statusLabel, stroopsToXlm, xlmToStroops, shortAddress } from '@/lib/format';
+import { ResultReveal } from '@/components/result-reveal';
+import {
+  centsToUsd,
+  statusLabel,
+  stroopsToXlm,
+  xlmToStroops,
+  shortAddress,
+  isPollableStatus,
+  RESOLUTION_POLL_MS,
+} from '@/lib/format';
 import { estimateBuyOut, withSlippageTolerance } from '@/lib/amm';
+import type { MarketStatus } from '@/lib/portfolio';
+import { useNextRound } from '@/lib/use-next-round';
 
 const SLIPPAGE_TOLERANCE_BPS = 200; // 2%
 
@@ -53,7 +64,11 @@ export default function EmbedMarketPage({ params }: { params: Promise<{ id: stri
   const [preferEmail, setPreferEmail] = useState(false);
   const showEmailFallback = !wallet && (preferEmail || !webauthnSupported);
 
-  const { data: market } = useQuery({ queryKey: ['market', id], queryFn: () => api.getMarket(id) });
+  const { data: market } = useQuery({
+    queryKey: ['market', id],
+    queryFn: () => api.getMarket(id),
+    refetchInterval: (query) => (isPollableStatus(query.state.data?.status) ? RESOLUTION_POLL_MS : false),
+  });
   const { data: price } = useQuery({
     queryKey: ['price', id],
     queryFn: () => api.getPrice(id),
@@ -63,7 +78,10 @@ export default function EmbedMarketPage({ params }: { params: Promise<{ id: stri
   const { data: state } = useQuery({
     queryKey: ['state', id],
     queryFn: () => api.getMarketState(id),
-    enabled: market?.status === 'watching',
+    // Was gated to only fetch while 'watching' — but the result moment
+    // needs the resolved state (final price, pool balances) right after
+    // expiry too, not just while trading is still open.
+    refetchInterval: isPollableStatus(market?.status) ? RESOLUTION_POLL_MS : false,
   });
   const { data: fee } = useQuery({
     queryKey: ['fee', id],
@@ -71,6 +89,12 @@ export default function EmbedMarketPage({ params }: { params: Promise<{ id: stri
     enabled: market?.status === 'watching',
     refetchInterval: 15_000,
   });
+  const { data: position } = useQuery({
+    queryKey: ['position', id, wallet?.address],
+    queryFn: () => api.getPosition(id, wallet!.address),
+    enabled: !!wallet,
+  });
+  const nextRound = useNextRound(market);
 
   const payoutPreview = useMemo(() => {
     if (!state || !fee) return null;
@@ -91,6 +115,8 @@ export default function EmbedMarketPage({ params }: { params: Promise<{ id: stri
   }
 
   const isOpen = market.status === 'watching';
+  const pos = position ? { yes: BigInt(position.yes), no: BigInt(position.no) } : null;
+  const onChainStatus = (state?.status ?? null) as MarketStatus | null;
 
   async function handleTrade() {
     if (!state || !fee) return;
@@ -160,7 +186,16 @@ export default function EmbedMarketPage({ params }: { params: Promise<{ id: stri
           {price && <OddsBar yesBps={price.yesBps} noBps={price.noBps} />}
 
           {!isOpen ? (
-            <p className="text-xs text-[var(--muted)]">Trading closed.</p>
+            pos && (pos.yes > 0n || pos.no > 0n) && onChainStatus && onChainStatus !== 'Open' ? (
+              <ResultReveal
+                status={onChainStatus}
+                position={pos}
+                compact
+                nextRoundHref={nextRound ? `/embed/${nextRound.contractId}` : undefined}
+              />
+            ) : (
+              <p className="text-xs text-[var(--muted)]">Trading closed.</p>
+            )
           ) : showEmailFallback ? (
             <AuthControls compact />
           ) : (
