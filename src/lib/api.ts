@@ -65,6 +65,8 @@ export interface OnChainMarket {
 
 export const api = {
   listMarkets: () => request<WatchedMarket[]>('/markets'),
+  /** Every tracked market for one feed, newest first — used to find a resolved market's auto-rolled successor (see MarketFactoryService in polaris-oracle). */
+  listMarketsForFeed: (feedId: number) => request<WatchedMarket[]>(`/markets?feedId=${feedId}`),
   getMarket: (id: string) => request<WatchedMarket>(`/markets/${id}`),
   getMarketState: (id: string) => request<OnChainMarket>(`/markets/${id}/state`),
   getPosition: (id: string, address: string) =>
