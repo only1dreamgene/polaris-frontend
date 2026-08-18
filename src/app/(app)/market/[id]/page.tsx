@@ -1,6 +1,7 @@
 'use client';
 
 import { use } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { Card, CardBody } from '@/components/ui/card';
@@ -12,6 +13,10 @@ import { centsToUsd, formatCountdown, statusLabel, stroopsToXlm, isPollableStatu
 
 export default function MarketDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
+  // Carried by ResultReveal's "Next round is live" link when this market is
+  // a resolved predecessor's auto-rolled successor — see TradeCard's
+  // `rolloverFromMarketId` doc comment.
+  const rolloverFrom = useSearchParams().get('rolloverFrom') ?? undefined;
 
   const { data: market } = useQuery({
     queryKey: ['market', id],
@@ -102,6 +107,7 @@ export default function MarketDetailPage({ params }: { params: Promise<{ id: str
       >
         <TradeCard
           marketId={id}
+          rolloverFromMarketId={rolloverFrom}
           className="max-h-[70vh] overflow-y-auto rounded-none border-0 bg-transparent shadow-none lg:max-h-none lg:overflow-visible lg:rounded-2xl lg:border lg:border-[var(--line)] lg:bg-[var(--surface)] lg:shadow-sm"
           bodyClassName="p-0 lg:p-5"
         />

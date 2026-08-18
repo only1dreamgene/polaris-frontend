@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, messageFromApiError } from '@/lib/api';
 import { useWallet } from '@/lib/wallet-provider';
@@ -39,11 +39,25 @@ export function TradeCard({
   marketId,
   className,
   bodyClassName,
+  rolloverFromMarketId,
 }: {
   marketId: string;
   /** Passed through to the outer `Card` — lets a caller (e.g. the detail page's mobile bottom-sheet) override the default card chrome without forking this component. */
   className?: string;
   bodyClassName?: string;
+  /**
+   * Set when this market was reached via a resolved predecessor's "Next
+   * round is live" link (see `ResultReveal`/`useNextRound`). If the wallet
+   * holds a redeemable win there, the amount field prefills with it and
+   * `handleTrade` redeems the old position before buying into this one —
+   * two sequential calls to the *existing* `redeem`/`buy` sponsored-call
+   * paths, not a new contract entrypoint or a new backend endpoint. If the
+   * redeem succeeds but the buy then fails (slippage, pool depth, this
+   * market already closed), the user simply holds the redeemed collateral
+   * in their own wallet — not a fund-safety issue, the same recoverable
+   * failure shape `txError` already surfaces for any other failed buy.
+   */
+  rolloverFromMarketId?: string;
 }) {
   const { wallet, connecting, creationStep, error: walletError, createWallet, cancelCreation } = useWallet();
   const queryClient = useQueryClient();
@@ -79,6 +93,32 @@ export function TradeCard({
     enabled: !!wallet,
   });
   const nextRound = useNextRound(market);
+
+  const { data: rolloverState } = useQuery({
+    queryKey: ['state', rolloverFromMarketId],
+    queryFn: () => api.getMarketState(rolloverFromMarketId!),
+    enabled: !!rolloverFromMarketId,
+  });
+  const { data: rolloverPosition } = useQuery({
+    queryKey: ['position', rolloverFromMarketId, wallet?.address],
+    queryFn: () => api.getPosition(rolloverFromMarketId!, wallet!.address),
+    enabled: !!rolloverFromMarketId && !!wallet,
+  });
+  const rolloverStatus = (rolloverState?.status ?? null) as MarketStatus | null;
+  const rolloverAmount =
+    rolloverStatus && rolloverStatus !== 'Open' && rolloverPosition
+      ? redeemableValue(rolloverStatus, { yes: BigInt(rolloverPosition.yes), no: BigInt(rolloverPosition.no) })
+      : 0n;
+
+  // Prefill the amount field with the rollover payout exactly once — not on
+  // every render, so it doesn't fight the user overwriting it afterward.
+  const prefilledRollover = useRef(false);
+  useEffect(() => {
+    if (rolloverAmount > 0n && !prefilledRollover.current) {
+      prefilledRollover.current = true;
+      setAmount(stroopsToXlm(rolloverAmount));
+    }
+  }, [rolloverAmount]);
 
   const payoutPreview = useMemo(() => {
     if (!state || !fee) return null;
@@ -122,6 +162,11 @@ export function TradeCard({
 
     setBusy(true);
     try {
+      if (rolloverFromMarketId && rolloverAmount > 0n) {
+        await callAsWallet(activeWallet, rolloverFromMarketId, 'redeem', {});
+        await queryClient.invalidateQueries({ queryKey: ['position', rolloverFromMarketId, activeWallet.address] });
+      }
+
       const stroops = xlmToStroops(amount);
       const estimate = estimateBuyOut(side, stroops, BigInt(state.poolYes), BigInt(state.poolNo), fee.feeBps);
       const minSharesOut = withSlippageTolerance(estimate, SLIPPAGE_TOLERANCE_BPS);
@@ -171,7 +216,7 @@ export function TradeCard({
               <ResultReveal
                 status={onChainStatus}
                 position={pos}
-                nextRoundHref={nextRound ? `/market/${nextRound.contractId}` : undefined}
+                nextRoundHref={nextRound ? `/market/${nextRound.contractId}?rolloverFrom=${marketId}` : undefined}
               />
             ) : (
               <p className="text-sm text-[var(--muted)]">Trading is closed.</p>
@@ -201,6 +246,11 @@ export function TradeCard({
                 inputMode="decimal"
               />
             </label>
+            {rolloverAmount > 0n && (
+              <p className="text-[11px] text-[var(--faint)]">
+                Funded by your {stroopsToXlm(rolloverAmount)} XLM winnings from last round
+              </p>
+            )}
 
             <div className="rounded-lg bg-[var(--surface-2)] px-3 py-2.5 text-sm">
               {payoutPreview ? (
@@ -225,7 +275,9 @@ export function TradeCard({
                   : 'Setting up…'
                 : busy
                   ? wallet?.kind === 'email'
-                    ? 'Placing bet…'
+                    ? rolloverAmount > 0n
+                      ? 'Rolling into this round…'
+                      : 'Placing bet…'
                     : 'Confirm with passkey…'
                   : `Buy ${side}`}
             </Button>
