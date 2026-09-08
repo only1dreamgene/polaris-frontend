@@ -25,9 +25,10 @@ remaining role for Freighter to play, so it isn't a dependency here.
 | `lib/portfolio.ts` | Mirrors the contract's redemption math for position values. Verified in `portfolio.spec.ts` — this mirror had gone stale relative to a contract-side fix once already (see "Known gaps"), which is exactly the kind of drift a real test catches and a standalone script someone forgets to re-run doesn't. |
 | `lib/amm.ts` | Mirrors the contract's constant-product swap math, to give `buy` a real slippage floor. `min_shares_out` had been hardcoded to `0` — no slippage protection at all — until pressure-testing this system caught it. Verified in `amm.spec.ts`. |
 | `lib/api.ts` | Typed client for every `polaris-oracle` endpoint this app uses. |
-| `app/(app)/*` | Dashboard, market detail + trade form, portfolio, admin console — share the topbar shell in `(app)/layout.tsx`. |
+| `app/(app)/*` | Dashboard, market detail + trade form, portfolio — share the topbar shell in `(app)/layout.tsx`. |
 | `app/docs/` | Public docs page, outside the `(app)` route group so it renders without the app chrome. |
 | `app/embed/[id]/` | The embeddable market widget — see "Embedding a market" below. Also outside `(app)`, no app chrome, minimal bundle. |
+| `app/admin/*` | The admin dashboard — its own top-level route group (not nested in `(app)`), own sidebar shell. See "Admin dashboard" below. |
 | `components/embed-code-button.tsx` | Generates the `<iframe>` snippet shown on the market detail page. |
 | `components/result-reveal.tsx` | The one deliberate "moment" in this app — see "The result-reveal moment" below. |
 | `lib/format.ts` | Centralizes amount/status/address formatting (`stroopsToXlm`, `centsToUsd`, `shortAddress`, `statusLabel`) and the resolution-polling helpers (`isPollableStatus`, `RESOLUTION_POLL_MS`). Every amount/address display in the app already routed through this before this round — confirmed by an explicit audit, not assumed — so making the blockchain invisible (below) was a vocabulary pass, not a formatting rewrite. |
@@ -136,6 +137,45 @@ the same testnet latency `polaris-oracle/README.md`'s bugs 6–8 already
 document. A verification script that doesn't budget generously for that
 will look like a bug in the reveal when the actual cause is just an
 impatient test.
+
+## Admin dashboard
+
+Rebuilt from a single flat page (an admin-key input plus a market list with
+Settle/Cancel buttons) into a real sectioned dashboard — grouped sidebar
+nav: **Platform** (Overview), **Finance** (Markets, Fee Revenue, Treasury),
+**Infrastructure** (Wallets, Blockchain, Fraud & Trust). No Growth group —
+Polaris has no referrals/notifications/waitlist concept, and an empty nav
+item is worse than not having the section.
+
+Two structural decisions worth knowing if you're extending this:
+
+1. **`/admin` moved out of the `(app)` route group into its own top-level
+   `app/admin/*` group**, not just for tidiness — `(app)/layout.tsx` renders
+   the public Markets/Portfolio/Docs header unconditionally around its
+   children, and a nested layout can only *add* to a parent's chrome, never
+   replace it. The dashboard needed its own full-bleed shell with no
+   public-site nav above it, which only a top-level move achieves. This is
+   the first non-root nested layout (`app/admin/layout.tsx`) in this
+   codebase.
+2. **A new `AdminKeyProvider`** (scoped to `/admin/*` only) promotes the old
+   per-component `useAdminKey` hook into a shared context that gates the
+   whole tree behind a key-entry screen — probing once per key change, not
+   once per page navigation. `(app)/create/page.tsx` (market creation, also
+   admin-only) still uses the original `lib/use-admin-key.ts` unchanged;
+   unifying the two wasn't part of this pass, so it wasn't touched. This is
+   genuinely new UX behavior, not a promotion of the old page's behavior
+   (which did zero client-side gating) — and it's still only a convenience
+   gate: the key lives in the same `sessionStorage`, real enforcement stays
+   100% server-side in `polaris-oracle`'s `AdminGuard`.
+
+No chart-library dependency — a small new `BarList` component (genuinely
+new, not a reskin of `odds-bar.tsx`, a fixed two-value split rather than an
+arbitrary ranked list) covers Fee Revenue's per-market breakdown and
+Overview's status counts. The data behind every section (fee revenue,
+treasury flows, wallet activity, settlement cross-checks) is served by
+`polaris-oracle`'s new `admin.controller.ts` — see that repo's README for
+how it's captured with no indexer, and the honest limits (forward-looking
+only, fee revenue is an estimate, passkey wallet coverage isn't exhaustive).
 
 ## Running
 
