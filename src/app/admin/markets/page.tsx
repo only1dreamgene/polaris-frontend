@@ -3,15 +3,15 @@
 import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
-import { useAdminKey } from '@/lib/use-admin-key';
+import { useAdminKey } from '@/lib/admin-key-provider';
 import { Card, CardBody } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { centsToUsd, shortAddress } from '@/lib/format';
 
-export default function AdminConsolePage() {
-  const { adminKey, setAdminKey } = useAdminKey();
+/** Relocated from `(app)/admin/page.tsx` verbatim (minus the admin-key input, now handled once by `admin/layout.tsx`'s gate) as part of the dashboard rebuild — see the other `admin/*` pages for what's actually new. */
+export default function AdminMarketsPage() {
+  const { adminKey } = useAdminKey();
   const queryClient = useQueryClient();
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -34,22 +34,7 @@ export default function AdminConsolePage() {
 
   return (
     <div>
-      <h1 className="mb-6 text-2xl font-bold">Admin console</h1>
-
-      <Card className="mb-6">
-        <CardBody>
-          <label className="block text-sm">
-            Admin key
-            <Input
-              type="password"
-              value={adminKey}
-              onChange={(e) => setAdminKey(e.target.value)}
-              className="mt-1 max-w-sm"
-              placeholder="x-admin-key"
-            />
-          </label>
-        </CardBody>
-      </Card>
+      <h1 className="mb-6 text-2xl font-bold">Markets</h1>
 
       {error && <p className="mb-4 text-sm text-[var(--no)] break-all">{error}</p>}
 
@@ -69,7 +54,7 @@ export default function AdminConsolePage() {
                 <Button
                   size="sm"
                   variant="outline"
-                  disabled={!adminKey || busyId === m.contractId}
+                  disabled={busyId === m.contractId}
                   onClick={() => act('settle', m.contractId)}
                 >
                   Settle
@@ -77,7 +62,7 @@ export default function AdminConsolePage() {
                 <Button
                   size="sm"
                   variant="outline"
-                  disabled={!adminKey || busyId === m.contractId}
+                  disabled={busyId === m.contractId}
                   onClick={() => act('cancel', m.contractId)}
                 >
                   Cancel

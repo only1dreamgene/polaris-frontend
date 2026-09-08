@@ -13,9 +13,22 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   });
   if (!res.ok) {
     const body = await res.text().catch(() => '');
-    throw new Error(`${init?.method ?? 'GET'} ${path} failed: ${res.status} ${body}`);
+    const err = new Error(`${init?.method ?? 'GET'} ${path} failed: ${res.status} ${body}`) as ApiError;
+    err.status = res.status;
+    throw err;
   }
   return res.json() as Promise<T>;
+}
+
+export type ApiError = Error & { status?: number };
+
+/** True only for a real "this key is wrong/missing" response — see `AdminGuard`, which throws `UnauthorizedException` (401) specifically so callers like `AdminKeyProvider`'s probe can rely on this rather than guessing from a generic network failure. */
+export function isUnauthorized(err: unknown): boolean {
+  return (err as ApiError)?.status === 401;
+}
+
+function adminGet<T>(path: string, adminKey: string): Promise<T> {
+  return request<T>(path, { headers: { 'x-admin-key': adminKey } });
 }
 
 /** `request()` above throws a generic `METHOD /path failed: 400 {...}` error — pull the backend's own message out of the JSON body when possible instead of showing that raw text to a user. */
@@ -61,6 +74,66 @@ export interface OnChainMarket {
   poolNo: string;
   totalSupply: string;
   initialLiquidity: string;
+}
+
+export interface AdminOverview {
+  totalMarkets: number;
+  marketsByStatus: Record<string, number>;
+  vaultBalanceStroops: string | null;
+  totalWalletActions: number;
+  settlementChecksByOutcome: { ok: number; skipped: number; failed: number };
+}
+
+export interface AdminFeeRevenue {
+  totalStroops: string;
+  byMarket: { contractId: string; stroops: string }[];
+  sampleSize: number;
+}
+
+export interface VaultFlow {
+  id: number;
+  vault_contract_id: string;
+  amount_stroops: string;
+  market_contract_id: string;
+  tx_hash: string;
+  created_at: number;
+}
+
+export type AdminTreasury =
+  | { configured: false }
+  | {
+      configured: true;
+      vaultContract: string;
+      balanceStroops: string;
+      totalDepositedStroops: string;
+      recentWithdrawals: VaultFlow[];
+    };
+
+export interface AdminWallets {
+  passkeyAddressesSeen: string[];
+  emailWallets: { email: string; address: string; createdAt: number }[];
+}
+
+export interface AdminNetwork {
+  status: string;
+  latestLedger: number;
+  oldestLedger: number;
+  ledgerRetentionWindow: number;
+  oraclePublicKey: string;
+  deployerPublicKey: string;
+  contracts: Record<string, string | undefined>;
+  wasmHashes: Record<string, string | undefined>;
+}
+
+export interface SettlementCheck {
+  id: number;
+  market_contract_id: string;
+  lazer_price_cents: string | null;
+  hermes_price_cents: string | null;
+  divergence_bps: number | null;
+  outcome: 'ok' | 'skipped' | 'failed';
+  reason: string | null;
+  created_at: number;
 }
 
 export const api = {
@@ -128,4 +201,13 @@ export const api = {
     request<WatchedMarket>(`/markets/${id}/settle`, { method: 'POST', headers: { 'x-admin-key': adminKey } }),
   triggerCancel: (adminKey: string, id: string) =>
     request<WatchedMarket>(`/markets/${id}/cancel`, { method: 'POST', headers: { 'x-admin-key': adminKey } }),
+
+  // admin dashboard — every call here is what AdminKeyProvider's gate probes with
+  getAdminOverview: (adminKey: string) => adminGet<AdminOverview>('/admin/overview', adminKey),
+  getAdminFeeRevenue: (adminKey: string) => adminGet<AdminFeeRevenue>('/admin/fee-revenue', adminKey),
+  getAdminTreasury: (adminKey: string) => adminGet<AdminTreasury>('/admin/treasury', adminKey),
+  getAdminWallets: (adminKey: string) => adminGet<AdminWallets>('/admin/wallets', adminKey),
+  getAdminNetwork: (adminKey: string) => adminGet<AdminNetwork>('/admin/network', adminKey),
+  getAdminSettlementChecks: (adminKey: string) =>
+    adminGet<{ checks: SettlementCheck[] }>('/admin/settlement-checks', adminKey),
 };

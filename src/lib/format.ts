@@ -33,6 +33,14 @@ export function formatCountdown(expiryUnixSecs: number): string {
   return `${mins}m`;
 }
 
+/** `created_at`-style unix-ms timestamps (as stored by the admin-activity tables) into a locale-formatted date/time — admin dashboard only, no formatting need for this anywhere else yet. */
+export function formatDateTime(unixMs: number): string {
+  return new Date(unixMs).toLocaleString(undefined, {
+    dateStyle: 'medium',
+    timeStyle: 'short',
+  });
+}
+
 export function shortAddress(address: string): string {
   if (address.length <= 12) return address;
   return `${address.slice(0, 6)}…${address.slice(-4)}`;
