@@ -1,10 +1,12 @@
 # polaris-frontend
 
+[![CI](https://github.com/samuel2926i39-art/polaris-frontend/actions/workflows/ci.yml/badge.svg)](https://github.com/samuel2926i39-art/polaris-frontend/actions/workflows/ci.yml)
+
 Next.js 16 app for **Polaris**. Entirely backend-mediated — every read and
 write goes through `polaris-oracle`'s REST API (see `lib/api.ts`); there's
 no direct Soroban RPC or wallet-extension SDK in this app at all.
 
-See `../polaris-contracts/README.md` and `../polaris-oracle/README.md` for
+See [`polaris-contracts`](https://github.com/samuel2926i39-art/polaris-contracts) and [`polaris-oracle`](https://github.com/samuel2926i39-art/polaris-oracle) for
 the rest of the system.
 
 ## Why no Freighter
