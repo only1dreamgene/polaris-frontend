@@ -36,6 +36,7 @@ export default function AdminOverviewPage() {
 
       <div className="mb-6 grid grid-cols-2 gap-4 sm:grid-cols-4">
         <StatTile label="Markets" value={data.totalMarkets.toString()} />
+        <StatTile label="Perpetuals" value={data.totalPerpetuals.toString()} />
         <StatTile
           label="Vault balance"
           value={data.vaultBalanceStroops ? `${stroopsToXlm(data.vaultBalanceStroops)} XLM` : '—'}
@@ -62,6 +63,22 @@ export default function AdminOverviewPage() {
                 formattedValue: count.toString(),
               }))}
             />
+          </CardBody>
+        </Card>
+        <Card>
+          <CardBody>
+            <h2 className="mb-3 text-sm font-semibold">Perpetuals by status</h2>
+            {Object.keys(data.perpetualsByStatus).length === 0 ? (
+              <p className="text-xs text-[var(--faint)]">No perpetuals yet.</p>
+            ) : (
+              <BarList
+                items={Object.entries(data.perpetualsByStatus).map(([status, count]) => ({
+                  label: status,
+                  value: count,
+                  formattedValue: count.toString(),
+                }))}
+              />
+            )}
           </CardBody>
         </Card>
         <Card>

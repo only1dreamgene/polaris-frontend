@@ -27,6 +27,9 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             <Link href="/" className="hover:text-[var(--ink)]">
               Markets
             </Link>
+            <Link href="/perpetuals" className="hover:text-[var(--ink)]">
+              Perpetuals
+            </Link>
             <Link href="/bets" className="hover:text-[var(--ink)]">
               Portfolio
             </Link>

@@ -76,9 +76,45 @@ export interface OnChainMarket {
   initialLiquidity: string;
 }
 
+/**
+ * `polaris-perpetual` — continuous trading, no strike/expiry/settle (see
+ * `polaris-contracts/README.md`'s "The perpetual contract"). Deliberately
+ * its own type, not `Partial<WatchedMarket>`/`Partial<OnChainMarket>`: a
+ * perpetual genuinely has none of `strikePriceCents`/`expiry`/
+ * `gracePeriodSecs`/`feedId`/`strikePrice`/`finalPrice`, so making those
+ * optional-on-a-market-shape would misrepresent a structural difference as
+ * a display nicety.
+ */
+export interface WatchedPerpetual {
+  contractId: string;
+  status: 'watching' | 'terminated';
+  lastError?: string;
+  terminateTxHash?: string;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface OnChainPerpetual {
+  admin: string;
+  collateral: string;
+  baseFeeBps: number;
+  minFeeBps: number;
+  treasury: string;
+  status: 'Open' | 'Terminated';
+  poolYes: string;
+  poolNo: string;
+  totalSupply: string;
+  initialLiquidity: string;
+  /** `0`/`"0"` until a `record_price_checkpoint` call has ever succeeded — purely informational, see the contract's own doc comment. No perpetual this backend deploys has an oracle configured yet, so this stays `"0"` in practice. */
+  lastPriceCents: string;
+  lastPriceAt: string;
+}
+
 export interface AdminOverview {
   totalMarkets: number;
   marketsByStatus: Record<string, number>;
+  totalPerpetuals: number;
+  perpetualsByStatus: Record<string, number>;
   vaultBalanceStroops: string | null;
   totalWalletActions: number;
   settlementChecksByOutcome: { ok: number; skipped: number; failed: number };
@@ -165,6 +201,8 @@ export const api = {
     contractId: string;
     function: string;
     args: Record<string, string | number>;
+    /** Which compiled contract spec the backend encodes `args` against — see `polaris-oracle/README.md`'s "Perpetual markets". Omit for a classic market. */
+    contractKind?: 'market' | 'perpetual';
   }) =>
     request<{ entryXdr: string; signaturePayloadHex: string; validUntilLedgerSeq: number }>(
       '/wallets/tx/prepare',
@@ -178,6 +216,7 @@ export const api = {
     function: string;
     args: Record<string, string | number>;
     assertion: WebAuthnAssertion;
+    contractKind?: 'market' | 'perpetual';
   }) => request<{ txHash: string }>('/wallets/tx/submit', { method: 'POST', body: JSON.stringify(params) }),
 
   // email login (fallback for browsers/webviews without usable WebAuthn — see `wallet-provider.tsx`)
@@ -187,8 +226,33 @@ export const api = {
     request<{ address: string }>('/auth/email/verify', { method: 'POST', body: JSON.stringify({ email, code }) }),
   getEmailSession: () => request<{ email: string; address: string }>('/auth/email/me'),
   emailLogout: () => request<{ ok: boolean }>('/auth/email/logout', { method: 'POST' }),
-  emailTrade: (params: { contractId: string; function: string; args: Record<string, string | number> }) =>
-    request<{ txHash: string }>('/auth/email/trade', { method: 'POST', body: JSON.stringify(params) }),
+  emailTrade: (params: {
+    contractId: string;
+    function: string;
+    args: Record<string, string | number>;
+    contractKind?: 'market' | 'perpetual';
+  }) => request<{ txHash: string }>('/auth/email/trade', { method: 'POST', body: JSON.stringify(params) }),
+
+  // perpetuals — see `polaris-oracle/README.md`'s "Perpetual markets" for
+  // why this is a parallel set of endpoints/types, not a `market`-shaped
+  // union: no strike/expiry/settle exist on this contract at all.
+  listPerpetuals: () => request<WatchedPerpetual[]>('/perpetuals'),
+  getPerpetual: (id: string) => request<WatchedPerpetual>(`/perpetuals/${id}`),
+  getPerpetualState: (id: string) => request<OnChainPerpetual>(`/perpetuals/${id}/state`),
+  getPerpetualPosition: (id: string, address: string) =>
+    request<{ yes: string; no: string }>(`/perpetuals/${id}/position?address=${encodeURIComponent(address)}`),
+  getPerpetualPrice: (id: string) => request<{ yesBps: number; noBps: number }>(`/perpetuals/${id}/price`),
+  getPerpetualFee: (id: string) => request<{ feeBps: number }>(`/perpetuals/${id}/fee`),
+
+  // admin
+  createPerpetual: (adminKey: string, body: Record<string, unknown>) =>
+    request<WatchedPerpetual & { initTxHash: string }>('/perpetuals/create', {
+      method: 'POST',
+      headers: { 'x-admin-key': adminKey },
+      body: JSON.stringify(body),
+    }),
+  triggerTerminate: (adminKey: string, id: string) =>
+    request<WatchedPerpetual>(`/perpetuals/${id}/terminate`, { method: 'POST', headers: { 'x-admin-key': adminKey } }),
 
   // admin
   createMarket: (adminKey: string, body: Record<string, unknown>) =>

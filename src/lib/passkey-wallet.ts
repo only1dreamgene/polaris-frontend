@@ -83,9 +83,11 @@ export async function callAsWallet(
   contractId: string,
   functionName: 'buy' | 'sell' | 'split' | 'merge' | 'transfer' | 'redeem',
   args: Record<string, string | number>,
+  /** `polaris-perpetual` shares every one of these functions' name and shape with `polaris-market` (see `polaris-contracts/README.md`'s "The perpetual contract") — this just picks which compiled spec the backend encodes `args` against. Omit for a classic market. */
+  contractKind?: 'market' | 'perpetual',
 ): Promise<{ txHash: string }> {
   if (wallet.kind === 'email') {
-    return api.emailTrade({ contractId, function: functionName, args });
+    return api.emailTrade({ contractId, function: functionName, args, contractKind });
   }
 
   const prepared = await api.prepareAuth({
@@ -93,6 +95,7 @@ export async function callAsWallet(
     contractId,
     function: functionName,
     args,
+    contractKind,
   });
 
   const assertion = await signWithPasskey(hexToBytes(prepared.signaturePayloadHex), wallet.credentialId);
@@ -104,5 +107,6 @@ export async function callAsWallet(
     function: functionName,
     args,
     assertion,
+    contractKind,
   });
 }

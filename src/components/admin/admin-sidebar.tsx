@@ -24,6 +24,7 @@ const NAV_GROUPS: NavGroup[] = [
     label: 'Finance',
     items: [
       { href: '/admin/markets', label: 'Markets' },
+      { href: '/admin/perpetuals', label: 'Perpetuals' },
       { href: '/admin/fee-revenue', label: 'Fee Revenue' },
       { href: '/admin/treasury', label: 'Treasury' },
     ],

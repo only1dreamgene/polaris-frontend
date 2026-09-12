@@ -53,6 +53,9 @@ const STATUS_LABELS: Record<string, string> = {
   cancelling: 'Cancelling',
   settled: 'Settled',
   cancelled: 'Cancelled',
+  // Perpetual-only status (`WatchedPerpetualStatus`) — `watching` is
+  // shared with classic markets above, so only this one needs adding.
+  terminated: 'Terminated',
 };
 
 /** Backend/on-chain status strings are internal names (e.g. "watching") — this is what a customer should read instead. */

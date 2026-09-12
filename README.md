@@ -31,6 +31,7 @@ remaining role for Freighter to play, so it isn't a dependency here.
 | `app/docs/` | Public docs page, outside the `(app)` route group so it renders without the app chrome. |
 | `app/embed/[id]/` | The embeddable market widget — see "Embedding a market" below. Also outside `(app)`, no app chrome, minimal bundle. |
 | `app/admin/*` | The admin dashboard — its own top-level route group (not nested in `(app)`), own sidebar shell. See "Admin dashboard" below. |
+| `app/(app)/perpetual[s]/*`, `components/perpetual-trade-card.tsx` | `polaris-perpetual`'s own pages/trade widget — a separate route family from classic markets, not a shared one with a type badge. See "Perpetual markets" below. |
 | `components/embed-code-button.tsx` | Generates the `<iframe>` snippet shown on the market detail page. |
 | `components/result-reveal.tsx` | The one deliberate "moment" in this app — see "The result-reveal moment" below. |
 | `lib/format.ts` | Centralizes amount/status/address formatting (`stroopsToXlm`, `centsToUsd`, `shortAddress`, `statusLabel`) and the resolution-polling helpers (`isPollableStatus`, `RESOLUTION_POLL_MS`). Every amount/address display in the app already routed through this before this round — confirmed by an explicit audit, not assumed — so making the blockchain invisible (below) was a vocabulary pass, not a formatting rewrite. |
@@ -178,6 +179,59 @@ treasury flows, wallet activity, settlement cross-checks) is served by
 `polaris-oracle`'s new `admin.controller.ts` — see that repo's README for
 how it's captured with no indexer, and the honest limits (forward-looking
 only, fee revenue is an estimate, passkey wallet coverage isn't exhaustive).
+
+## Perpetual markets
+
+`polaris-perpetual` (see `polaris-contracts/README.md`'s "The perpetual
+contract") is a second, continuous-trading contract kind — no strike
+price, no expiry, no resolution event. Deliberately its **own** route
+family (`/perpetuals`, `/perpetual/[id]`, `admin/perpetuals`) rather than
+folded into the existing markets pages with a type badge — `polaris-oracle`
+tracks it in a separate table with a different shape entirely (see that
+repo's README), so a shared list/schema on this side would just be hiding
+the same mismatch behind a UI layer.
+
+**A new `PerpetualTradeCard`, not a `kind`-parameterized `TradeCard`.**
+The two contracts share `buy`'s exact mechanics, but the *trading model*
+differs in a way that matters for the UI, not just the data: a classic
+market is "place a bet, wait for one resolution event" — `TradeCard`'s
+`ResultReveal`/`rolloverFromMarketId`/"next round" machinery all exist
+for that specific shape, none of which a perpetual has (it never resolves
+to a winner; every complementary pair pays the same 0.5 XLM regardless of
+side once `terminate()` fires). `TradeCard`'s own doc comment already
+records the lesson this project learned about forking *the same* betting
+flow across two pages (`lib/portfolio.ts`'s stale Cancelled-payout
+mirror) — this isn't that: one flow, one page family, for a genuinely
+different contract shape. `PerpetualTradeCard` reuses the same low-level
+pieces that *are* generic (`OddsBar`, `estimateBuyOut`/`withSlippageTolerance`
+from `lib/amm.ts`, `callAsWallet`, and `redeemableValue`'s `'Cancelled'`
+case for `Terminated`'s identical 0.5-per-pair math) rather than
+reimplementing any of them.
+
+**`callAsWallet`/`api.prepareAuth`/`submitAuth`/`emailTrade` all gained an
+optional `contractKind: 'market' | 'perpetual'` param** (default
+`'market'`, so every existing call site keeps working unchanged) — it's
+the only thing that changed in the trading/signing path, since
+`polaris-oracle` needs to know which compiled contract spec to encode
+trade arguments against.
+
+**Scope this round**: buy + redeem-after-`terminate()` only — the same
+scope classic markets' own `TradeCard` has today (it doesn't expose
+`sell` either, even though `polaris-market` has always had one). A
+perpetual's "last observed price" checkpoint renders on the detail page
+when present, but every perpetual this system deploys has no oracle
+configured yet, so it always reads as "no checkpoint recorded yet" for
+now — see `polaris-oracle/README.md`'s "Perpetual markets" for what's
+deferred and why.
+
+**Verified live** (via `polaris-oracle`'s real API, mocked network
+responses matching its real shapes to sidestep this dev environment's
+CORS setup for a second local port): the perpetuals list, an open
+perpetual's detail page + trade card (payout preview, Buy button),
+a terminated perpetual's "trading is closed" state, and the admin
+Perpetuals table (status badges, a correctly-disabled Terminate button
+once already terminated) — plus the admin Overview page's new
+`Perpetuals`/`Perpetuals by status` tiles reading real aggregate counts.
 
 ## Running
 
