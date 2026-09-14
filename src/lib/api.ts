@@ -253,6 +253,12 @@ export const api = {
     }),
   triggerTerminate: (adminKey: string, id: string) =>
     request<WatchedPerpetual>(`/perpetuals/${id}/terminate`, { method: 'POST', headers: { 'x-admin-key': adminKey } }),
+  /** Admin-triggered, not scheduled — see `polaris-oracle/README.md`'s "Perpetual markets". Only meaningful for a perpetual whose `price_oracle` bundle is actually configured (`MOCK_REDSTONE_CONTRACT` set on the backend); otherwise the backend itself returns a clear error. */
+  triggerCheckpoint: (adminKey: string, id: string) =>
+    request<OnChainPerpetual & { txHash: string }>(`/perpetuals/${id}/checkpoint`, {
+      method: 'POST',
+      headers: { 'x-admin-key': adminKey },
+    }),
 
   // admin
   createMarket: (adminKey: string, body: Record<string, unknown>) =>

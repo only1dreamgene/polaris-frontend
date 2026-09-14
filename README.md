@@ -217,12 +217,19 @@ trade arguments against.
 
 **Scope this round**: buy + redeem-after-`terminate()` only — the same
 scope classic markets' own `TradeCard` has today (it doesn't expose
-`sell` either, even though `polaris-market` has always had one). A
-perpetual's "last observed price" checkpoint renders on the detail page
-when present, but every perpetual this system deploys has no oracle
-configured yet, so it always reads as "no checkpoint recorded yet" for
-now — see `polaris-oracle/README.md`'s "Perpetual markets" for what's
-deferred and why.
+`sell` either, even though `polaris-market` has always had one).
+
+**Follow-up round**: `admin/perpetuals/page.tsx` gained a `Checkpoint`
+button alongside `Terminate` — calls the backend's new
+`POST /perpetuals/:id/checkpoint` (admin-triggered, not scheduled — see
+`polaris-oracle/README.md`'s "Perpetual markets" for the mock-RedStone
+wiring that makes this exercisable on testnet at all) and shows the
+result's price inline (`Last checkpoint: $0.18`-style, via the same
+`centsToUsd` every other price display already uses). The detail page's
+"last observed price" line — present since the scope-this-round bullet
+above, but always empty until now since no perpetual had an oracle
+configured — actually populates once an admin has checkpointed that
+market at least once.
 
 **Verified live** (via `polaris-oracle`'s real API, mocked network
 responses matching its real shapes to sidestep this dev environment's
