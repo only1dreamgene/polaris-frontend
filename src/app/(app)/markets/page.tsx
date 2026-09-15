@@ -3,9 +3,8 @@
 import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@/lib/api';
-import { Card, CardBody } from '@/components/ui/card';
+import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { OddsBar } from '@/components/odds-bar';
 import { centsToUsd, formatCountdown, statusLabel } from '@/lib/format';
 
 function statusTone(status: string): 'yes' | 'no' | 'warn' | 'neutral' {
@@ -15,7 +14,15 @@ function statusTone(status: string): 'yes' | 'no' | 'warn' | 'neutral' {
   return 'neutral';
 }
 
-function MarketCard({ contractId }: { contractId: string }) {
+/**
+ * A dense, ticker-style row rather than the old card grid — one line per
+ * market, right-aligned tabular odds instead of a full odds bar, so a
+ * growing list of markets scans like a watchlist instead of a stack of
+ * tiles. No Chg/Chg% column: unlike a stock ticker, there's no price
+ * history stored anywhere yet to compute a real change from — showing a
+ * fabricated number here would be worse than not having the column.
+ */
+function MarketRow({ contractId }: { contractId: string }) {
   const { data: market } = useQuery({
     queryKey: ['market', contractId],
     queryFn: () => api.getMarket(contractId),
@@ -29,38 +36,62 @@ function MarketCard({ contractId }: { contractId: string }) {
 
   if (!market) return null;
 
+  const yesPct = price ? Math.round(price.yesBps / 100) : undefined;
+  const noPct = price ? Math.round(price.noBps / 100) : undefined;
+  const isOpen = market.status === 'watching';
+
   return (
-    <Link href={`/market/${contractId}`}>
-      <Card className="transition-shadow hover:shadow-md">
-        <CardBody>
-          <div className="mb-2 flex items-center justify-between">
-            <span className="text-xs font-semibold uppercase tracking-wide text-[var(--faint)]">
-              XLM/USD
-            </span>
-            <Badge tone={statusTone(market.status)}>{statusLabel(market.status)}</Badge>
-          </div>
-          <h3 className="mb-3 text-lg font-semibold">
-            Will XLM be ≥ {centsToUsd(market.strikePriceCents)} by expiry?
-          </h3>
-          {price ? (
-            <OddsBar yesBps={price.yesBps} noBps={price.noBps} />
-          ) : (
-            <div className="h-2 w-full rounded-full bg-[var(--surface-2)]" />
-          )}
-          <div className="mt-3 text-xs text-[var(--muted)]">
-            {market.status === 'watching' ? `closes in ${formatCountdown(market.expiry)}` : 'closed'}
-          </div>
-        </CardBody>
-      </Card>
+    <Link
+      href={`/market/${contractId}`}
+      className="grid grid-cols-[auto_1fr_auto_auto_auto] items-center gap-x-3 px-4 py-3 transition-colors hover:bg-[var(--surface-2)] sm:gap-x-5 sm:px-5"
+    >
+      <span
+        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-bold text-white"
+        style={{ background: isOpen ? 'linear-gradient(135deg, #5b4fe0, #8b7bff)' : 'var(--faint)' }}
+      >
+        XL
+      </span>
+
+      <span className="min-w-0">
+        <span className="block truncate font-semibold">XLM/USD</span>
+        <span className="block truncate text-xs text-[var(--muted)]">
+          ≥ {centsToUsd(market.strikePriceCents)}
+        </span>
+      </span>
+
+      <span className="text-right font-mono text-sm tabular-nums">
+        {yesPct !== undefined ? (
+          <span style={{ color: 'var(--yes)' }}>{yesPct}%</span>
+        ) : (
+          <span className="text-[var(--faint)]">—</span>
+        )}
+        <span className="block text-[10px] uppercase tracking-wide text-[var(--faint)]">Yes</span>
+      </span>
+
+      <span className="text-right font-mono text-sm tabular-nums">
+        {noPct !== undefined ? (
+          <span style={{ color: 'var(--no)' }}>{noPct}%</span>
+        ) : (
+          <span className="text-[var(--faint)]">—</span>
+        )}
+        <span className="block text-[10px] uppercase tracking-wide text-[var(--faint)]">No</span>
+      </span>
+
+      <span className="hidden text-right sm:block">
+        <Badge tone={statusTone(market.status)}>{statusLabel(market.status)}</Badge>
+        <span className="mt-1 block text-xs text-[var(--muted)]">
+          {isOpen ? formatCountdown(market.expiry) : 'closed'}
+        </span>
+      </span>
     </Link>
   );
 }
 
 /**
- * The full-grid view — every market, every status. Not the primary landing
+ * The full-list view — every market, every status. Not the primary landing
  * experience anymore (see `(app)/page.tsx`'s curated single-market view),
- * but nothing here was removed: this is the same grid the homepage used to
- * be, kept as the "browse everything" fallback linked from there.
+ * but nothing here was removed: this is the "browse everything" fallback
+ * linked from there, now a watchlist-style list rather than a card grid.
  */
 export default function AllMarketsPage() {
   const { data: markets, isLoading, error } = useQuery({
@@ -82,11 +113,22 @@ export default function AllMarketsPage() {
         <p className="text-sm text-[var(--muted)]">No markets yet — an admin can create one from /create.</p>
       )}
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {markets?.map((m) => (
-          <MarketCard key={m.contractId} contractId={m.contractId} />
-        ))}
-      </div>
+      {markets && markets.length > 0 && (
+        <Card className="overflow-hidden">
+          <div className="grid grid-cols-[auto_1fr_auto_auto_auto] gap-x-3 border-b border-[var(--line)] px-4 py-2 text-[10px] font-semibold uppercase tracking-wide text-[var(--faint)] sm:gap-x-5 sm:px-5">
+            <span />
+            <span>Market</span>
+            <span className="text-right">Yes</span>
+            <span className="text-right">No</span>
+            <span className="hidden text-right sm:block">Status</span>
+          </div>
+          <div className="divide-y divide-[var(--line)]">
+            {markets.map((m) => (
+              <MarketRow key={m.contractId} contractId={m.contractId} />
+            ))}
+          </div>
+        </Card>
+      )}
     </div>
   );
 }
