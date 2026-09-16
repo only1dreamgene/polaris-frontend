@@ -35,6 +35,7 @@ This is one of three repos that make up Polaris:
 - [Design notes](#design-notes)
 - [Verified live: the real WebAuthn path](#verified-live-the-real-webauthn-path)
 - [Known gaps](#known-gaps)
+- [Contributing](#contributing)
 
 ## Features
 
@@ -325,6 +326,13 @@ could behave differently for.
   embed to trade, works around it.
 - Classic markets and perpetuals don't yet expose a `Sell` action in the
   UI — buy + redeem-after-resolution only (see the linked issues above).
+
+## Contributing
+
+Peer review and testing are the most effective way to contribute to a
+project this size — see [CONTRIBUTING.md](./CONTRIBUTING.md) for the full
+process (adapted from Bitcoin Core's), including the higher review bar
+that applies to wallet/signing code.
 
 ## License
 
