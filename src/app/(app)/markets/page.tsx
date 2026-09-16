@@ -15,12 +15,30 @@ function statusTone(status: string): 'yes' | 'no' | 'warn' | 'neutral' {
 }
 
 /**
+ * `null` (never `0`) means "no history to compare against yet" — a market
+ * younger than the backend's snapshot window, or the snapshot service
+ * hasn't run long enough since a fresh deploy. Rendered as a plain dash,
+ * not a fabricated "+0%", so it reads as "not enough data" rather than
+ * "hasn't moved" — see `polaris-oracle`'s `GET /markets/:id/price` doc
+ * comment for why that distinction is made server-side too.
+ */
+function ChgCell({ yesBpsChange }: { yesBpsChange: number | null | undefined }) {
+  if (yesBpsChange === null || yesBpsChange === undefined) {
+    return <span className="text-[var(--faint)]">—</span>;
+  }
+  const pct = Math.round(yesBpsChange / 100);
+  const color = pct > 0 ? 'var(--yes)' : pct < 0 ? 'var(--no)' : 'var(--muted)';
+  const sign = pct > 0 ? '+' : '';
+  return <span style={{ color }}>{sign}{pct}%</span>;
+}
+
+/**
  * A dense, ticker-style row rather than the old card grid — one line per
  * market, right-aligned tabular odds instead of a full odds bar, so a
  * growing list of markets scans like a watchlist instead of a stack of
- * tiles. No Chg/Chg% column: unlike a stock ticker, there's no price
- * history stored anywhere yet to compute a real change from — showing a
- * fabricated number here would be worse than not having the column.
+ * tiles. "Chg" is the YES odds' real move against `polaris-oracle`'s
+ * recorded history (default a 1h lookback) — see `ChgCell`'s doc comment
+ * for the null-vs-zero distinction.
  */
 function MarketRow({ contractId }: { contractId: string }) {
   const { data: market } = useQuery({
@@ -43,7 +61,7 @@ function MarketRow({ contractId }: { contractId: string }) {
   return (
     <Link
       href={`/market/${contractId}`}
-      className="grid grid-cols-[auto_1fr_auto_auto_auto] items-center gap-x-3 px-4 py-3 transition-colors hover:bg-[var(--surface-2)] sm:gap-x-5 sm:px-5"
+      className="grid grid-cols-[auto_1fr_auto_auto_auto_auto] items-center gap-x-3 px-4 py-3 transition-colors hover:bg-[var(--surface-2)] sm:gap-x-5 sm:px-5"
     >
       <span
         className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-bold text-white"
@@ -75,6 +93,11 @@ function MarketRow({ contractId }: { contractId: string }) {
           <span className="text-[var(--faint)]">—</span>
         )}
         <span className="block text-[10px] uppercase tracking-wide text-[var(--faint)]">No</span>
+      </span>
+
+      <span className="text-right font-mono text-sm tabular-nums">
+        <ChgCell yesBpsChange={price?.yesBpsChange} />
+        <span className="block text-[10px] uppercase tracking-wide text-[var(--faint)]">Chg</span>
       </span>
 
       <span className="hidden text-right sm:block">
@@ -115,11 +138,12 @@ export default function AllMarketsPage() {
 
       {markets && markets.length > 0 && (
         <Card className="overflow-hidden">
-          <div className="grid grid-cols-[auto_1fr_auto_auto_auto] gap-x-3 border-b border-[var(--line)] px-4 py-2 text-[10px] font-semibold uppercase tracking-wide text-[var(--faint)] sm:gap-x-5 sm:px-5">
+          <div className="grid grid-cols-[auto_1fr_auto_auto_auto_auto] gap-x-3 border-b border-[var(--line)] px-4 py-2 text-[10px] font-semibold uppercase tracking-wide text-[var(--faint)] sm:gap-x-5 sm:px-5">
             <span />
             <span>Market</span>
             <span className="text-right">Yes</span>
             <span className="text-right">No</span>
+            <span className="text-right">Chg</span>
             <span className="hidden text-right sm:block">Status</span>
           </div>
           <div className="divide-y divide-[var(--line)]">

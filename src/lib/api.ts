@@ -180,7 +180,8 @@ export const api = {
   getMarketState: (id: string) => request<OnChainMarket>(`/markets/${id}/state`),
   getPosition: (id: string, address: string) =>
     request<{ yes: string; no: string }>(`/markets/${id}/position?address=${encodeURIComponent(address)}`),
-  getPrice: (id: string) => request<{ yesBps: number; noBps: number }>(`/markets/${id}/price`),
+  getPrice: (id: string) =>
+    request<{ yesBps: number; noBps: number; yesBpsChange: number | null }>(`/markets/${id}/price`),
   getFee: (id: string) => request<{ feeBps: number }>(`/markets/${id}/fee`),
   getTickerPrice: (feedId: string) => request<unknown>(`/prices/${feedId}`),
 
